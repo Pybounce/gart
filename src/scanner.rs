@@ -224,6 +224,7 @@ impl<'a> Scanner<'a> {
                 match c {
                     ' ' => { col += 1; self.advance(); },
                     '\t' => { col += 4; self.advance(); },
+                    '\n' => return self.newline(),
                     _ =>  {
                         self.indent_target = col;
                         return self.make_token(TokenType::NewLine).into();
@@ -270,6 +271,99 @@ mod test {
 
         for expected_token in expected_tokens.iter() {
             assert_eq!(*expected_token, scanner.scan_token());
+        }
+    }
+
+    #[test]
+    fn gap_in_indent() {
+        let source = r#"
+if x <= 1:
+    print "hi"
+    print "hello!"
+
+    print "hola"
+"#;
+        let mut scanner = Scanner::new(&source);
+
+        let expected_tokens = vec![
+            Token::new(TokenType::NewLine, 0, 3, 1),
+
+            Token::new(TokenType::If, 0, 3, 1),
+            Token::new(TokenType::Identifier, 0, 3, 1),
+            Token::new(TokenType::LessEqual, 0, 3, 1),
+            Token::new(TokenType::Number, 0, 3, 1),
+            Token::new(TokenType::Colon, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 3, 1),
+
+            Token::new(TokenType::Indent, 0, 3, 1),
+            Token::new(TokenType::Print, 0, 3, 1),
+            Token::new(TokenType::String, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 3, 1),
+
+            Token::new(TokenType::Print, 0, 3, 1),
+            Token::new(TokenType::String, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 3, 1),
+
+            Token::new(TokenType::Print, 0, 3, 1),
+            Token::new(TokenType::String, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::Dedent, 0, 3, 1),
+
+            Token::new(TokenType::Eof, 13, 0, 1),
+        ];
+
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(expected_token.token_type, scanner.scan_token().token_type, "{}", i);  //temporary!
+        }
+    }
+
+    #[test]
+    fn indented_newline() {
+        // The empty line has an indentation. 
+        // But since it ends in a newline with no other characters, it should be ignored.
+        let source = r#"
+if x <= 1:
+    print "x greater than 1"
+            
+if x == 42:
+    print "x is 42"
+"#;
+        let mut scanner = Scanner::new(&source);
+
+        let expected_tokens = vec![
+            Token::new(TokenType::NewLine, 0, 3, 1),
+
+            Token::new(TokenType::If, 0, 3, 1),
+            Token::new(TokenType::Identifier, 0, 3, 1),
+            Token::new(TokenType::LessEqual, 0, 3, 1),
+            Token::new(TokenType::Number, 0, 3, 1),
+            Token::new(TokenType::Colon, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 3, 1),
+
+            Token::new(TokenType::Indent, 0, 3, 1),
+            Token::new(TokenType::Print, 0, 3, 1),
+            Token::new(TokenType::String, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::Dedent, 0, 3, 1),
+
+            Token::new(TokenType::If, 0, 3, 1),
+            Token::new(TokenType::Identifier, 0, 3, 1),
+            Token::new(TokenType::EqualEqual, 0, 3, 1),
+            Token::new(TokenType::Number, 0, 3, 1),
+            Token::new(TokenType::Colon, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 3, 1),
+
+            Token::new(TokenType::Indent, 0, 3, 1),
+            Token::new(TokenType::Print, 0, 3, 1),
+            Token::new(TokenType::String, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::Dedent, 0, 3, 1),
+
+            Token::new(TokenType::Eof, 13, 0, 1),
+        ];
+
+        for expected_token in expected_tokens.iter() {
+            assert_eq!(expected_token.token_type, scanner.scan_token().token_type);  //temporary!
         }
     }
 
