@@ -459,7 +459,7 @@ if x == 42:
     }
 
     #[test]
-    fn indents() {
+    fn nested_indents() {
         let source = r#"
 var x = 42
 if x > 1:
@@ -539,9 +539,18 @@ print   "x is 42"
 
     // Unrecognised character
 
-    // multi-newline skip
-    //  ie, if I have a bunch of blank new lines, it just takes the first one
-    //  UNLESS there is an error, then it returns the error
+    // string termination
+    // string newlines
+
+    // keywords
+
+    // identifiers (valid and invalid names like beginning with _ or numbers)
+
+    // numbers (decimal too)
+
+    // empty file
+
+    // function definitions
 }
 
 
