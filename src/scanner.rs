@@ -11,6 +11,7 @@ pub struct Scanner<'a> {
     line: usize,
     indent_stack: Vec<i32>,
     indent_target: i32,
+    previous_token: Option<TokenType>
 }
 
 impl<'a> Scanner<'a> {
@@ -21,15 +22,20 @@ impl<'a> Scanner<'a> {
             next: 0,
             line: 1,
             indent_stack: vec![0],
-            indent_target: 0
+            indent_target: 0,
+            previous_token: None
         }
     }
-
     pub fn scan_token(&mut self) -> Token {
-        println!("");
-        println!("");
-        println!("target: {}", self.indent_target);
-        println!("curdent: {:?}", self.indent_stack.last());
+        let token = self.next_token();
+        self.previous_token = token.token_type.into();
+        return token;
+    }
+
+}
+
+impl<'a> Scanner<'a> {
+        fn next_token(&mut self) -> Token {
         
         if let Some(token) = self.resolve_indent() {
             return token;
@@ -68,9 +74,6 @@ impl<'a> Scanner<'a> {
         return self.make_err_token("Unexpect character.");
         
     }
-}
-
-impl<'a> Scanner<'a> {
     fn is_alpha(&self, c: char) -> bool {
         return (c >= 'a' && c <= 'z') ||
             (c >= 'A' && c <= 'Z') ||
@@ -90,6 +93,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn make_err_token(&self, message: &str) -> Token {
+        println!("{}", message);
         return self.make_token(TokenType::Error);   // this is wrong but fine for now.
     }
 
@@ -215,19 +219,38 @@ impl<'a> Scanner<'a> {
     /// If found, processes spaces and tabs to create indent target and raises newline token </br>
     fn newline(&mut self) -> Option<Token> {
         if self.expect('\n') {
+            let newline_token = self.make_token(TokenType::NewLine);
+            self.line += 1;
             let mut col = 0;
             loop {
                 let Some(c) = self.peek() else { 
                     self.indent_target = 0;
-                    return self.make_token(TokenType::NewLine).into(); 
+                    return newline_token.into(); 
                 };
                 match c {
                     ' ' => { col += 1; self.advance(); },
                     '\t' => { col += 4; self.advance(); },
                     '\n' => return self.newline(),
                     _ =>  {
+                        let current = *self.indent_stack.last().unwrap_or(&0);
+                        if let Some(prev_c) = self.previous_token {
+                            if prev_c == TokenType::Colon {
+                                println!("col   {}", col);
+                                println!("cur   {}", current);
+                                // target must be > current OR target must be 0
+                                if col <= current {
+                                    return self.make_err_token("Must indent the following code after ':'.").into();
+                                }
+                            }
+                            else {
+                                // target must be <= current OR the same
+                                if col > current {
+                                    return self.make_err_token("Cannot indent code after newline.").into();
+                                }
+                            }
+                        }
                         self.indent_target = col;
-                        return self.make_token(TokenType::NewLine).into();
+                        return newline_token.into();
                     }
                 };
             }
@@ -271,6 +294,63 @@ mod test {
 
         for expected_token in expected_tokens.iter() {
             assert_eq!(*expected_token, scanner.scan_token());
+        }
+    }
+
+    #[test]
+    fn error_random_indent() {
+        let source = r#"
+print "hello"
+    print "world"
+"#;
+        let mut scanner = Scanner::new(&source);
+
+        let expected_tokens = vec![
+            Token::new(TokenType::NewLine, 0, 3, 1),
+
+            Token::new(TokenType::Print, 0, 3, 1),
+            Token::new(TokenType::String, 0, 3, 1),
+
+            Token::new(TokenType::Error, 0, 3, 1),
+
+            Token::new(TokenType::Print, 0, 3, 1),
+            Token::new(TokenType::String, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 0, 0),
+            Token::new(TokenType::Eof, 13, 0, 1),
+        ];
+
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(expected_token.token_type, scanner.scan_token().token_type, "{}", i);  //temporary!
+        }
+    }
+
+    #[test]
+    fn error_empty_if() {
+        let source = r#"
+if x <= 1:
+print "hi"
+"#;
+        let mut scanner = Scanner::new(&source);
+
+        let expected_tokens = vec![
+            Token::new(TokenType::NewLine, 0, 3, 1),
+
+            Token::new(TokenType::If, 0, 3, 1),
+            Token::new(TokenType::Identifier, 0, 3, 1),
+            Token::new(TokenType::LessEqual, 0, 3, 1),
+            Token::new(TokenType::Number, 0, 3, 1),
+            Token::new(TokenType::Colon, 0, 3, 1),
+
+            Token::new(TokenType::Error, 0, 3, 1),
+
+            Token::new(TokenType::Print, 0, 3, 1),
+            Token::new(TokenType::String, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 0, 0),
+            Token::new(TokenType::Eof, 13, 0, 1),
+        ];
+
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(expected_token.token_type, scanner.scan_token().token_type, "{}", i);  //temporary!
         }
     }
 
@@ -410,8 +490,56 @@ if x > 1:
             Token::new(TokenType::Eof, 0, 0, 1),
         ];
 
-        for expected_token in expected_tokens.iter() {
-            assert_eq!(expected_token.token_type, scanner.scan_token().token_type);  //temporary!
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(expected_token.token_type, scanner.scan_token().token_type, "{}", i);  //temporary!
+        }
+    }
+
+    #[test]
+    fn whitespace() {
+        let source = r#"
+var    x   =     42
+if  x    >   1:     
+    print    "x greater than 1"
+    if x    ==  42  :
+        print "x is 42"
+"#;
+        let mut scanner = Scanner::new(&source);
+
+        let expected_tokens = vec![
+            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::Var, 0, 3, 1),
+            Token::new(TokenType::Identifier, 0, 3, 1),
+            Token::new(TokenType::Equal, 0, 3, 1),
+            Token::new(TokenType::Number, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::If, 0, 3, 1),
+            Token::new(TokenType::Identifier, 0, 3, 1),
+            Token::new(TokenType::Greater, 0, 3, 1),
+            Token::new(TokenType::Number, 0, 3, 1),
+            Token::new(TokenType::Colon, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::Indent, 0, 3, 1),
+            Token::new(TokenType::Print, 0, 3, 1),
+            Token::new(TokenType::String, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::If, 0, 3, 1),
+            Token::new(TokenType::Identifier, 0, 3, 1),
+            Token::new(TokenType::EqualEqual, 0, 3, 1),
+            Token::new(TokenType::Number, 0, 3, 1),
+            Token::new(TokenType::Colon, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::Indent, 0, 3, 1),
+            Token::new(TokenType::Print, 0, 3, 1),
+            Token::new(TokenType::String, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::Dedent, 0, 3, 1),
+            Token::new(TokenType::Dedent, 0, 3, 1),
+            Token::new(TokenType::Eof, 0, 0, 1),
+        ];
+
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(expected_token.token_type, scanner.scan_token().token_type, "{}", i);  //temporary!
         }
     }
 }
