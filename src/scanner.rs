@@ -57,7 +57,6 @@ impl<'a> Scanner<'a> {
             '(' => return self.make_token(TokenType::LeftParen),
             ')' => return self.make_token(TokenType::RightParen),
             ',' => return self.make_token(TokenType::Comma),
-            '.' => return self.make_token(TokenType::Dot),
             '-' => return self.make_token(TokenType::Minus),
             '+' => return self.make_token(TokenType::Plus),
             '/' => return self.make_token(TokenType::Slash),
@@ -286,7 +285,6 @@ impl<'a> Scanner<'a> {
 #[cfg(test)]
 mod test {
     use crate::{scanner::Scanner, token::{Token, TokenType}};
-
 
     #[test]
     fn single_statement() {
@@ -537,20 +535,214 @@ print   "x is 42"
         }
     }
 
-    // Unrecognised character
+    #[test]
+    fn error_unrecognised_token() {
+        let source = r#"x = $"#;
+        let mut scanner = Scanner::new(&source);
 
-    // string termination
-    // string newlines
+        let expected_tokens = vec![
+            Token::new(TokenType::Identifier, 0, 1, 1),
+            Token::new(TokenType::Equal, 2, 1, 1),
+            Token::new(TokenType::Error, 4, 1, 1),
+            Token::new(TokenType::Eof, 5, 0, 1),
+        ];
 
-    // keywords
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(*expected_token, scanner.scan_token(), "Token Index: {}", i);
+        }
+    }
 
+    #[test]
+    fn error_unterminated_string() {
+        let source = r#"x = "my_string"#;
+        let mut scanner = Scanner::new(&source);
+
+        let expected_tokens = vec![
+            Token::new(TokenType::Identifier, 0, 1, 1),
+            Token::new(TokenType::Equal, 2, 1, 1),
+            Token::new(TokenType::Error, 4, 10, 1),
+            Token::new(TokenType::Eof, 14, 0, 1),
+        ];
+
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(*expected_token, scanner.scan_token(), "Token Index: {}", i);
+        }
+    }
+
+    #[test]
+    fn multiline_string() {
+        let source = r#"
+x = "line 1
+line 2"
+"#;
+        let mut scanner = Scanner::new(&source);
+
+        let expected_tokens = vec![
+            Token::new(TokenType::NewLine, 0, 1, 1),
+            Token::new(TokenType::Identifier, 1, 1, 2),
+            Token::new(TokenType::Equal, 3, 1, 2),
+            Token::new(TokenType::String, 5, 15, 3),
+            Token::new(TokenType::NewLine, 20, 1, 3),
+            Token::new(TokenType::Eof, 21, 0, 4),
+        ];
+
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(*expected_token, scanner.scan_token(), "Token Index: {}", i);
+        }
+    }
+
+    #[test]
+    fn keywords() {
+        let source = r#"and else false for fn if null or print return true var while"#;
+        let mut scanner = Scanner::new(&source);
+
+        let expected_tokens = vec![
+            Token::new(TokenType::And, 0, 3, 1),
+            Token::new(TokenType::Else, 4, 4, 1),
+            Token::new(TokenType::False, 9, 5, 1),
+            Token::new(TokenType::For, 15, 3, 1),
+            Token::new(TokenType::Fn, 19, 2, 1),
+            Token::new(TokenType::If, 22, 2, 1),
+            Token::new(TokenType::Null, 25, 4, 1),
+            Token::new(TokenType::Or, 30, 2, 1),
+            Token::new(TokenType::Print, 33, 5, 1),
+            Token::new(TokenType::Return, 39, 6, 1),
+            Token::new(TokenType::True, 46, 4, 1),
+            Token::new(TokenType::Var, 51, 3, 1),
+            Token::new(TokenType::While, 55, 5, 1),
+            Token::new(TokenType::Eof, 60, 0, 1),
+        ];
+
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(*expected_token, scanner.scan_token(), "Token Index: {}", i);
+        }
+    }
+
+    #[test]
+    fn identifiers_containing_keywords() {
+        let source = r#"_and _else _false _for _fn if2 _null oor aprint _return true_ var_ _while_"#;
+        let mut scanner = Scanner::new(&source);
+
+        let expected_tokens = vec![
+            Token::new(TokenType::Identifier, 0, 4, 1),
+            Token::new(TokenType::Identifier, 5, 5, 1),
+            Token::new(TokenType::Identifier, 11, 6, 1),
+            Token::new(TokenType::Identifier, 18, 4, 1),
+            Token::new(TokenType::Identifier, 23, 3, 1),
+            Token::new(TokenType::Identifier, 27, 3, 1),
+            Token::new(TokenType::Identifier, 31, 5, 1),
+            Token::new(TokenType::Identifier, 37, 3, 1),
+            Token::new(TokenType::Identifier, 41, 6, 1),
+            Token::new(TokenType::Identifier, 48, 7, 1),
+            Token::new(TokenType::Identifier, 56, 5, 1),
+            Token::new(TokenType::Identifier, 62, 4, 1),
+            Token::new(TokenType::Identifier, 67, 7, 1),
+            Token::new(TokenType::Eof, 74, 0, 1),
+        ];
+
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(*expected_token, scanner.scan_token(), "Token Index: {}", i);
+        }
+    }
+
+    #[test]
+    fn operator_tokens() {
+        let source = r#"+ - * / < > ! = <= >= != == and or"#;
+        let mut scanner = Scanner::new(&source);
+
+        let expected_tokens = vec![
+            Token::new(TokenType::Plus, 0, 1, 1),
+            Token::new(TokenType::Minus, 2, 1, 1),
+            Token::new(TokenType::Star, 4, 1, 1),
+            Token::new(TokenType::Slash, 6, 1, 1),
+            Token::new(TokenType::Less, 8, 1, 1),
+            Token::new(TokenType::Greater, 10, 1, 1),
+            Token::new(TokenType::Bang, 12, 1, 1),
+            Token::new(TokenType::Equal, 14, 1, 1),
+            Token::new(TokenType::LessEqual, 16, 2, 1),
+            Token::new(TokenType::GreaterEqual, 19, 2, 1),
+            Token::new(TokenType::BangEqual, 22, 2, 1),
+            Token::new(TokenType::EqualEqual, 25, 2, 1),
+            Token::new(TokenType::And, 28, 3, 1),
+            Token::new(TokenType::Or, 32, 2, 1),
+            Token::new(TokenType::Eof, 34, 0, 1),
+        ];
+
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(*expected_token, scanner.scan_token(), "Token Index: {}", i);
+        }
+    }
+
+    #[test]
+    fn delimiter_tokens() {
+        let source = r#": , ( )"#;
+        let mut scanner = Scanner::new(&source);
+
+        let expected_tokens = vec![
+            Token::new(TokenType::Colon, 0, 1, 1),
+            Token::new(TokenType::Comma, 2, 1, 1),
+            Token::new(TokenType::LeftParen, 4, 1, 1),
+            Token::new(TokenType::RightParen, 6, 1, 1),
+            Token::new(TokenType::Eof, 7, 0, 1),
+        ];
+
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(*expected_token, scanner.scan_token(), "Token Index: {}", i);
+        }
+    }
+
+    #[test]
+    fn numbers() {
+        let source = r#"2 24 2.394 0.1"#;
+        let mut scanner = Scanner::new(&source);
+
+        let expected_tokens = vec![
+            Token::new(TokenType::Number, 0, 1, 1),
+            Token::new(TokenType::Number, 2, 2, 1),
+            Token::new(TokenType::Number, 5, 5, 1),
+            Token::new(TokenType::Number, 11, 3, 1),
+            Token::new(TokenType::Eof, 14, 0, 1),
+        ];
+
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(*expected_token, scanner.scan_token(), "Token Index: {}", i);
+        }
+    }
+
+    #[test]
+    fn error_trailing_decimal() {
+        let source = r#"var x = 2."#;
+        let mut scanner = Scanner::new(&source);
+
+        let expected_tokens = vec![
+            Token::new(TokenType::Var, 0, 3, 1),
+            Token::new(TokenType::Identifier, 4, 1, 1),
+            Token::new(TokenType::Equal, 6, 1, 1),
+            Token::new(TokenType::Number, 8, 1, 1),
+            Token::new(TokenType::Error, 9, 1, 1),
+            Token::new(TokenType::Eof, 10, 0, 1),
+        ];
+
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(*expected_token, scanner.scan_token(), "Token Index: {}", i);
+        }
+    }
+
+    #[test]
+    fn empty_source() {
+        let source = r#""#;
+        let mut scanner = Scanner::new(&source);
+
+        let expected_tokens = vec![
+            Token::new(TokenType::Eof, 0, 0, 1),
+        ];
+
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(*expected_token, scanner.scan_token(), "Token Index: {}", i);
+        }
+    }
     // identifiers (valid and invalid names like beginning with _ or numbers)
 
-    // numbers (decimal too)
-
-    // empty file
-
-    // function definitions
 }
 
 

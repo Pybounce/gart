@@ -28,7 +28,6 @@ pub enum TokenType {
     Dedent,
     NewLine,
     Comma,
-    Dot,
     Minus,
     Plus,
     Colon,
