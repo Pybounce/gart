@@ -1,15 +1,13 @@
 use std::env;
 
-use crate::{chunk::{Chunk, OpCode}, debug::disassemble_chunk};
+use crate::scanner::Scanner;
 
-
-pub mod chunk;
-pub mod debug;
+mod scanner;
+mod token;
 
 fn main() {
-    //let args: Vec<String> = env::args().collect();
-    let mut chunk = Chunk::new();
-    chunk.write(OpCode::Return);
-
-    disassemble_chunk(&chunk, "test chunk");
+    let args: Vec<String> = env::args().collect();
+    let source = "var x = 1 + 1";
+    let mut scanner = Scanner::new(&source);
+    scanner.scan_token();
 }
