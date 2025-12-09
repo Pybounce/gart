@@ -233,7 +233,15 @@ impl<'a> Scanner<'a> {
                 match c {
                     ' ' => { col += 1; self.advance(); },
                     '\t' => { col += 4; self.advance(); },
-                    '\n' => return self.newline(),
+                    '\n' => {
+                        let token = self.newline();
+                        if let Some(t) = token {
+                            if t.token_type == TokenType::Error {
+                                return token;
+                            }
+                        }
+                        return newline_token.into();
+                    },
                     _ =>  {
                         let current = *self.indent_stack.last().unwrap_or(&0);
                         if let Some(prev_c) = self.previous_token {
@@ -314,12 +322,12 @@ print "hello"
             Token::new(TokenType::Print, 1, 5, 2),
             Token::new(TokenType::String, 7, 7, 2),
 
-            Token::new(TokenType::Error, 14, 1, 2),
+            Token::new(TokenType::Error, 15, 4, 3),
 
-            Token::new(TokenType::Print, 15, 5, 3),
-            Token::new(TokenType::String, 0, 3, 1),
-            Token::new(TokenType::NewLine, 0, 0, 0),
-            Token::new(TokenType::Eof, 13, 0, 1),
+            Token::new(TokenType::Print, 19, 5, 3),
+            Token::new(TokenType::String, 25, 7, 3),
+            Token::new(TokenType::NewLine, 32, 1, 3),
+            Token::new(TokenType::Eof, 33, 0, 4),
         ];
 
         for (i, expected_token) in expected_tokens.iter().enumerate() {
@@ -336,24 +344,24 @@ print "hi"
         let mut scanner = Scanner::new(&source);
 
         let expected_tokens = vec![
-            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 1, 1),
 
-            Token::new(TokenType::If, 0, 3, 1),
-            Token::new(TokenType::Identifier, 0, 3, 1),
-            Token::new(TokenType::LessEqual, 0, 3, 1),
-            Token::new(TokenType::Number, 0, 3, 1),
-            Token::new(TokenType::Colon, 0, 3, 1),
+            Token::new(TokenType::If, 1, 2, 2),
+            Token::new(TokenType::Identifier, 4, 1, 2),
+            Token::new(TokenType::LessEqual, 6, 2, 2),
+            Token::new(TokenType::Number, 9, 1, 2),
+            Token::new(TokenType::Colon, 10, 1, 2),
 
-            Token::new(TokenType::Error, 0, 3, 1),
+            Token::new(TokenType::Error, 12, 0, 3),
 
-            Token::new(TokenType::Print, 0, 3, 1),
-            Token::new(TokenType::String, 0, 3, 1),
-            Token::new(TokenType::NewLine, 0, 0, 0),
-            Token::new(TokenType::Eof, 13, 0, 1),
+            Token::new(TokenType::Print, 12, 5, 3),
+            Token::new(TokenType::String, 18, 4, 3),
+            Token::new(TokenType::NewLine, 22, 1, 3),
+            Token::new(TokenType::Eof, 23, 0, 4),
         ];
 
         for (i, expected_token) in expected_tokens.iter().enumerate() {
-            assert_eq!(expected_token.token_type, scanner.scan_token().token_type, "{}", i);  //temporary!
+            assert_eq!(*expected_token, scanner.scan_token(), "Token Index: {}", i);
         }
     }
 
@@ -369,34 +377,34 @@ if x <= 1:
         let mut scanner = Scanner::new(&source);
 
         let expected_tokens = vec![
-            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 1, 1),
 
-            Token::new(TokenType::If, 0, 3, 1),
-            Token::new(TokenType::Identifier, 0, 3, 1),
-            Token::new(TokenType::LessEqual, 0, 3, 1),
-            Token::new(TokenType::Number, 0, 3, 1),
-            Token::new(TokenType::Colon, 0, 3, 1),
-            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::If, 1, 2, 2),
+            Token::new(TokenType::Identifier, 4, 1, 2),
+            Token::new(TokenType::LessEqual, 6, 2, 2),
+            Token::new(TokenType::Number, 9, 1, 2),
+            Token::new(TokenType::Colon, 10, 1, 2),
+            Token::new(TokenType::NewLine, 11, 1, 2),
 
-            Token::new(TokenType::Indent, 0, 3, 1),
-            Token::new(TokenType::Print, 0, 3, 1),
-            Token::new(TokenType::String, 0, 3, 1),
-            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::Indent, 12, 4, 3),
+            Token::new(TokenType::Print, 16, 5, 3),
+            Token::new(TokenType::String, 22, 4, 3),
+            Token::new(TokenType::NewLine, 26, 1, 3),
 
-            Token::new(TokenType::Print, 0, 3, 1),
-            Token::new(TokenType::String, 0, 3, 1),
-            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::Print, 31, 5, 4),
+            Token::new(TokenType::String, 37, 8, 4),
+            Token::new(TokenType::NewLine, 45, 1, 4),
 
-            Token::new(TokenType::Print, 0, 3, 1),
-            Token::new(TokenType::String, 0, 3, 1),
-            Token::new(TokenType::NewLine, 0, 3, 1),
-            Token::new(TokenType::Dedent, 0, 3, 1),
+            Token::new(TokenType::Print, 51, 5, 6),
+            Token::new(TokenType::String, 57, 6, 6),
+            Token::new(TokenType::NewLine, 63, 1, 6),
+            Token::new(TokenType::Dedent, 64, 0, 7),
 
-            Token::new(TokenType::Eof, 13, 0, 1),
+            Token::new(TokenType::Eof, 64, 0, 7),
         ];
 
         for (i, expected_token) in expected_tokens.iter().enumerate() {
-            assert_eq!(expected_token.token_type, scanner.scan_token().token_type, "{}", i);  //temporary!
+            assert_eq!(*expected_token, scanner.scan_token(), "Token Index: {}", i);
         }
     }
 
@@ -409,44 +417,44 @@ if x <= 1:
     print "x greater than 1"
             
 if x == 42:
-    print "x is 42"
+    print "42"
 "#;
         let mut scanner = Scanner::new(&source);
 
         let expected_tokens = vec![
-            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::NewLine, 0, 1, 1),
 
-            Token::new(TokenType::If, 0, 3, 1),
-            Token::new(TokenType::Identifier, 0, 3, 1),
-            Token::new(TokenType::LessEqual, 0, 3, 1),
-            Token::new(TokenType::Number, 0, 3, 1),
-            Token::new(TokenType::Colon, 0, 3, 1),
-            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::If, 1, 2, 2),
+            Token::new(TokenType::Identifier, 4, 1, 2),
+            Token::new(TokenType::LessEqual, 6, 2, 2),
+            Token::new(TokenType::Number, 9, 1, 2),
+            Token::new(TokenType::Colon, 10, 1, 2),
+            Token::new(TokenType::NewLine, 11, 1, 2),
 
-            Token::new(TokenType::Indent, 0, 3, 1),
-            Token::new(TokenType::Print, 0, 3, 1),
-            Token::new(TokenType::String, 0, 3, 1),
-            Token::new(TokenType::NewLine, 0, 3, 1),
-            Token::new(TokenType::Dedent, 0, 3, 1),
+            Token::new(TokenType::Indent, 12, 4, 3),
+            Token::new(TokenType::Print, 16, 5, 3),
+            Token::new(TokenType::String, 22, 18, 3),
+            Token::new(TokenType::NewLine, 40, 1, 3),
+            Token::new(TokenType::Dedent, 54, 0, 5),
 
-            Token::new(TokenType::If, 0, 3, 1),
-            Token::new(TokenType::Identifier, 0, 3, 1),
-            Token::new(TokenType::EqualEqual, 0, 3, 1),
-            Token::new(TokenType::Number, 0, 3, 1),
-            Token::new(TokenType::Colon, 0, 3, 1),
-            Token::new(TokenType::NewLine, 0, 3, 1),
+            Token::new(TokenType::If, 54, 2, 5),
+            Token::new(TokenType::Identifier, 57, 1, 5),
+            Token::new(TokenType::EqualEqual, 59, 2, 5),
+            Token::new(TokenType::Number, 62, 2, 5),
+            Token::new(TokenType::Colon, 64, 1, 5),
+            Token::new(TokenType::NewLine, 65, 1, 5),
 
-            Token::new(TokenType::Indent, 0, 3, 1),
-            Token::new(TokenType::Print, 0, 3, 1),
-            Token::new(TokenType::String, 0, 3, 1),
-            Token::new(TokenType::NewLine, 0, 3, 1),
-            Token::new(TokenType::Dedent, 0, 3, 1),
+            Token::new(TokenType::Indent, 66, 4, 6),
+            Token::new(TokenType::Print, 70, 5, 6),
+            Token::new(TokenType::String, 76, 4, 6),
+            Token::new(TokenType::NewLine, 80, 1, 6),
+            Token::new(TokenType::Dedent, 81, 0, 7),
 
-            Token::new(TokenType::Eof, 13, 0, 1),
+            Token::new(TokenType::Eof, 81, 0, 7),
         ];
 
-        for expected_token in expected_tokens.iter() {
-            assert_eq!(expected_token.token_type, scanner.scan_token().token_type);  //temporary!
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(*expected_token, scanner.scan_token(), "Token Index: {}", i);
         }
     }
 
@@ -502,49 +510,38 @@ if x > 1:
     fn whitespace() {
         let source = r#"
 var    x   =     42
-if  x    >   1:     
-    print    "x greater than 1"
-    if x    ==  42  :
-        print "x is 42"
+       
+                 
+
+print   "x is 42"
 "#;
         let mut scanner = Scanner::new(&source);
 
         let expected_tokens = vec![
-            Token::new(TokenType::NewLine, 0, 3, 1),
-            Token::new(TokenType::Var, 0, 3, 1),
-            Token::new(TokenType::Identifier, 0, 3, 1),
-            Token::new(TokenType::Equal, 0, 3, 1),
-            Token::new(TokenType::Number, 0, 3, 1),
-            Token::new(TokenType::NewLine, 0, 3, 1),
-            Token::new(TokenType::If, 0, 3, 1),
-            Token::new(TokenType::Identifier, 0, 3, 1),
-            Token::new(TokenType::Greater, 0, 3, 1),
-            Token::new(TokenType::Number, 0, 3, 1),
-            Token::new(TokenType::Colon, 0, 3, 1),
-            Token::new(TokenType::NewLine, 0, 3, 1),
-            Token::new(TokenType::Indent, 0, 3, 1),
-            Token::new(TokenType::Print, 0, 3, 1),
-            Token::new(TokenType::String, 0, 3, 1),
-            Token::new(TokenType::NewLine, 0, 3, 1),
-            Token::new(TokenType::If, 0, 3, 1),
-            Token::new(TokenType::Identifier, 0, 3, 1),
-            Token::new(TokenType::EqualEqual, 0, 3, 1),
-            Token::new(TokenType::Number, 0, 3, 1),
-            Token::new(TokenType::Colon, 0, 3, 1),
-            Token::new(TokenType::NewLine, 0, 3, 1),
-            Token::new(TokenType::Indent, 0, 3, 1),
-            Token::new(TokenType::Print, 0, 3, 1),
-            Token::new(TokenType::String, 0, 3, 1),
-            Token::new(TokenType::NewLine, 0, 3, 1),
-            Token::new(TokenType::Dedent, 0, 3, 1),
-            Token::new(TokenType::Dedent, 0, 3, 1),
-            Token::new(TokenType::Eof, 0, 0, 1),
+            Token::new(TokenType::NewLine, 0, 1, 1),
+            Token::new(TokenType::Var, 1, 3, 2),
+            Token::new(TokenType::Identifier, 8, 1, 2),
+            Token::new(TokenType::Equal, 12, 1, 2),
+            Token::new(TokenType::Number, 18, 2, 2),
+            Token::new(TokenType::NewLine, 20, 1, 2),
+
+            Token::new(TokenType::Print, 48, 5, 6),
+            Token::new(TokenType::String, 56, 9, 6),
+            Token::new(TokenType::NewLine, 65, 1, 6),
+
+            Token::new(TokenType::Eof, 66, 0, 7),
         ];
 
         for (i, expected_token) in expected_tokens.iter().enumerate() {
-            assert_eq!(expected_token.token_type, scanner.scan_token().token_type, "{}", i);  //temporary!
+            assert_eq!(*expected_token, scanner.scan_token(), "Token Index: {}", i);
         }
     }
+
+    // Unrecognised character
+
+    // multi-newline skip
+    //  ie, if I have a bunch of blank new lines, it just takes the first one
+    //  UNLESS there is an error, then it returns the error
 }
 
 
