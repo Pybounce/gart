@@ -741,7 +741,6 @@ line 2"
             assert_eq!(*expected_token, scanner.scan_token(), "Token Index: {}", i);
         }
     }
-    // identifiers (valid and invalid names like beginning with _ or numbers)
 
 }
 
