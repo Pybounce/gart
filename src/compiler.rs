@@ -1,4 +1,4 @@
-use crate::{chunk::Chunk, scanner::Scanner, token::{Token, TokenType}};
+use crate::{chunk::Chunk, opcode::OpCode, scanner::Scanner, token::{Token, TokenType}};
 
 
 pub struct Compiler<'a> {
@@ -43,7 +43,32 @@ impl<'a> Compiler<'a> {
     }
 
     fn statement(&mut self) {
+        if self.match_token(TokenType::Print) {
+            self.print_statement();
+        }
+        else {
+            self.expression_statement();
+        }
+    }
 
+    fn print_statement(&mut self) {
+        self.expression();
+        self.consume(TokenType::NewLine, "Expect newline after expression."); //TODO: This probably breaks if instead you have EoF
+        self.emit_byte(OpCode::Print);
+    }
+
+    fn expression_statement(&mut self) {
+
+    }
+
+    fn expression(&mut self) {
+
+    }
+}
+
+impl<'a> Compiler<'a> {
+    fn emit_byte(&mut self, code: OpCode) {
+        self.chunk.write_op(code, self.previous_token.line);
     }
 }
 
@@ -54,7 +79,21 @@ impl<'a> Compiler<'a> {
         self.panic_mode = false;
 
         while self.current_token.token_type != TokenType::Eof {
-            //TODO: Need to solve for end of expression
+            //TODO: Need to solve for end of expression, newline is not great.
+            if self.previous_token.token_type == TokenType::NewLine { return; }
+            match self.current_token.token_type {
+                TokenType::Fn
+                | TokenType::Var
+                | TokenType::For
+                | TokenType::If
+                | TokenType::While
+                | TokenType::Print
+                | TokenType::Return => {
+                    return;
+                }
+                _ => { }
+            }
+            self.advance();
         }
 
     }
@@ -67,6 +106,14 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    fn consume(&mut self, token_type: TokenType, message: &'static str) {
+        if self.current_token.token_type == token_type {
+            self.advance();
+            return;
+        }
+        self.error_at_current(message);
+    }
+
     fn match_token(&mut self, token_type: TokenType) -> bool {
         if self.check_token(token_type) == false { return false; }
         self.advance();
@@ -77,11 +124,11 @@ impl<'a> Compiler<'a> {
         return self.current_token.token_type == token_type;
     }
 
-    fn error_at_current(&mut self, message: String) {
+    fn error_at_current(&mut self, message: &'static str) {
         self.error_at(self.current_token, message);
     }
 
-    fn error_at(&mut self, token: Token, message: String) {
+    fn error_at(&mut self, token: Token, message: &'static str) {
         if self.panic_mode { return; }
         self.panic_mode = true;
 
@@ -97,7 +144,7 @@ impl<'a> Compiler<'a> {
         self.had_error = true;
     }
 
-    fn error_at_previous(&mut self, message: String) {
+    fn error_at_previous(&mut self, message: &'static str) {
         self.error_at(self.previous_token, message);
     }
 }
