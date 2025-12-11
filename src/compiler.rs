@@ -106,6 +106,17 @@ impl<'a> Compiler<'a> {
         self.consume(TokenType::RightParen, "Expect ')' after expression.");
     }
 
+    fn unary(&mut self, can_assign: bool) {
+        let operator = self.previous_token.token_type;
+        self.parse_precedence(ParsePrecedence::Unary);
+
+        match operator {
+            TokenType::Bang => self.emit_op(OpCode::Not),
+            TokenType::Minus => self.emit_op(OpCode::Negate),
+            _ => self.error_at_previous("Unreachable unary operator...reached."),
+        }
+    }
+
     fn parse_precedence(&mut self, precedence: ParsePrecedence) {
         self.advance();
         let prefix_fn = self.get_rule(self.previous_token.token_type).prefix;
@@ -133,7 +144,7 @@ impl<'a> Compiler<'a> {
             ParseFn::Binary => self.binary(can_assign),
             ParseFn::Grouping => self.grouping(can_assign),
             ParseFn::Call => todo!(),
-            ParseFn::Unary => todo!(),
+            ParseFn::Unary => self.unary(can_assign),
             ParseFn::Variable => todo!(),
             ParseFn::String => todo!(),
             ParseFn::Literal => todo!(),
@@ -306,9 +317,9 @@ mod test {
 
         let expected_chunk = Chunk {
             bytes: vec![
-                OpCode::Constant as u8,
-                0u8,
-                OpCode::Print as u8
+                OpCode::Constant.into(),
+                0,
+                OpCode::Print.into()
             ],
             lines: vec![1, 1, 1],
             constants: vec![Value::Number(1.0)],
@@ -325,18 +336,18 @@ mod test {
 
         let expected_chunk = Chunk {
             bytes: vec![
-                OpCode::Constant as u8,
-                0u8,
-                OpCode::Constant as u8,
-                1u8,
-                OpCode::Constant as u8,
-                2u8,
-                OpCode::Constant as u8,
-                3u8,
-                OpCode::Subtract as u8,
-                OpCode::Multiply as u8,
-                OpCode::Add as u8,
-                OpCode::Pop as u8,
+                OpCode::Constant.into(),
+                0,
+                OpCode::Constant.into(),
+                1,
+                OpCode::Constant.into(),
+                2,
+                OpCode::Constant.into(),
+                3,
+                OpCode::Subtract.into(),
+                OpCode::Multiply.into(),
+                OpCode::Add.into(),
+                OpCode::Pop.into(),
             ],
             lines: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
             constants: vec![
@@ -351,7 +362,7 @@ mod test {
         assert_eq!(expected_chunk, output.expect("Failed to compile"));
     }
 
-        #[test]
+    #[test]
     fn error_trailing_arithmetic_op() {
         let source = r#"1 +"#;
         let compiler = Compiler::new(&source);
@@ -361,15 +372,35 @@ mod test {
     }
 
     #[test]
+    fn arithmetic_minus_unary() {
+        let source = r#"-10.4"#;
+        let compiler = Compiler::new(&source);
+
+        let expected_chunk = Chunk {
+            bytes: vec![
+                OpCode::Constant.into(),
+                0,
+                OpCode::Negate.into(),
+                OpCode::Pop.into()
+            ],
+            lines: vec![1, 1, 1, 1],
+            constants: vec![Value::Number(10.4)],
+        };
+
+        let output = compiler.compile();
+        assert_eq!(expected_chunk, output.expect("Failed to compile"));
+    }
+
+    #[test]
     fn single_line() {
         let source = r#"print 1"#;
         let compiler = Compiler::new(&source);
 
         let expected_chunk = Chunk {
             bytes: vec![
-                OpCode::Constant as u8,
-                0u8,
-                OpCode::Print as u8
+                OpCode::Constant.into(),
+                0,
+                OpCode::Print.into()
             ],
             lines: vec![1, 1, 1],
             constants: vec![Value::Number(1.0)],
@@ -388,9 +419,9 @@ print 1"#;
 
         let expected_chunk = Chunk {
             bytes: vec![
-                OpCode::Constant as u8,
-                0u8,
-                OpCode::Print as u8
+                OpCode::Constant.into(),
+                0,
+                OpCode::Print.into()
             ],
             lines: vec![3, 3, 3],
             constants: vec![Value::Number(1.0)],
@@ -408,9 +439,9 @@ print 1"#;
 
         let expected_chunk = Chunk {
             bytes: vec![
-                OpCode::Constant as u8,
-                0u8,
-                OpCode::Print as u8
+                OpCode::Constant.into(),
+                0,
+                OpCode::Print.into()
             ],
             lines: vec![1, 1, 1],
             constants: vec![Value::Number(1.0)],
