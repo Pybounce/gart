@@ -23,12 +23,12 @@ impl<'a> Compiler<'a> {
             panic_mode: false,
         }
     }
-    pub fn compile(mut self) -> Chunk {
+    pub fn compile(mut self) -> Option<Chunk> {
         self.advance();
         while self.match_token(TokenType::Eof) == false {
             self.declaration();
         }
-        return self.chunk;
+        return (!self.had_error).then(|| self.chunk);
     }
 }
 
@@ -315,7 +315,7 @@ mod test {
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output);
+        assert_eq!(expected_chunk, output.expect("Failed to compile"));
     }
 
     #[test]
@@ -348,7 +348,16 @@ mod test {
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output);
+        assert_eq!(expected_chunk, output.expect("Failed to compile"));
+    }
+
+        #[test]
+    fn error_trailing_arithmetic_op() {
+        let source = r#"1 +"#;
+        let compiler = Compiler::new(&source);
+        
+        let output = compiler.compile();
+        assert_eq!(None, output);
     }
 
     #[test]
@@ -367,7 +376,7 @@ mod test {
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output);
+        assert_eq!(expected_chunk, output.expect("Failed to compile"));
     }
 
     #[test]
@@ -388,7 +397,7 @@ print 1"#;
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output);
+        assert_eq!(expected_chunk, output.expect("Failed to compile"));
     }
 
     #[test]
@@ -408,6 +417,6 @@ print 1"#;
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output);
+        assert_eq!(expected_chunk, output.expect("Failed to compile"));
     }
 }
