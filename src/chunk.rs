@@ -15,6 +15,9 @@ impl Chunk {
             constants: vec![]
         }
     }
+    pub fn write_op(&mut self, op: OpCode, line: usize) {
+        self.write_byte(op as u8, line);
+    }
     pub fn write_byte(&mut self, byte: u8, line: usize) {
         self.bytes.push(byte);
         self.lines.push(line);
