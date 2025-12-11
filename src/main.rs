@@ -1,4 +1,6 @@
 
+use std::io::{self, BufRead, Write};
+
 use crate::vm::VM;
 
 pub(crate) mod scanner;
@@ -11,11 +13,27 @@ pub(crate) mod parse;
 pub(crate) mod vm;
 
 fn main() {
-    let source = r#"
-print 1 + 1
-print 8*8
-print 7*(5+2)/4*(100+(4*2))
-7+7"#;
+    println!("\n\n- - - - - - REPL MODE - - - - - -\n");
+    
     let mut vm = VM::new();
-    vm.interpret(source);        
+
+    let mut source = String::new();
+    loop {
+        print!("> ");
+        io::stdout().flush().unwrap();
+
+        match io::stdin().read_line(&mut source) {
+            Ok(_) => {
+                if !vm.interpret(&source) { 
+                    println!("Failed to interpret input.");
+                }
+            }
+            Err(e) => {
+                println!("Error occured reading input. {:?}", e);
+                return;
+            }
+        }
+        source.clear();
+    }
+
 }
