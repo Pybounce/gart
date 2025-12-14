@@ -535,4 +535,139 @@ print 1"#;
         let output = compiler.compile();
         assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
     }
+
+    #[test]
+    fn global_declarations() {
+        let source = r#"
+var g = 1
+var g2 = 2"#;
+        let compiler = Compiler::new(&source);
+
+        let expected_chunk = Chunk {
+            bytes: vec![
+                OpCode::Constant.into(),
+                0,
+                OpCode::DefineGlobal.into(),
+                0,
+                OpCode::Constant.into(),
+                1,
+                OpCode::DefineGlobal.into(),
+                1,
+                OpCode::Return.into()
+            ],
+            lines: vec![2, 2, 2, 2, 3, 3, 3, 3, 3],
+            constants: vec![Value::Number(1.0), Value::Number(2.0)],
+        };
+        let expected_global_count = 2;
+        
+        let output = compiler.compile().expect("Failed to compile");
+        assert_eq!(expected_chunk, output.chunk);
+        assert_eq!(expected_global_count, output.globals_count);
+    }
+
+    #[test]
+    fn global_assignment() {
+        let source = r#"
+var g = 1
+var g2 = 2
+g = 4"#;
+        let compiler = Compiler::new(&source);
+
+        let expected_chunk = Chunk {
+            bytes: vec![
+                OpCode::Constant.into(),
+                0,
+                OpCode::DefineGlobal.into(),
+                0,
+                OpCode::Constant.into(),
+                1,
+                OpCode::DefineGlobal.into(),
+                1,
+                OpCode::Constant.into(),
+                2,
+                OpCode::SetGlobal.into(),
+                0,
+                OpCode::Pop.into(),
+                OpCode::Return.into()
+            ],
+            lines: vec![2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4],
+            constants: vec![Value::Number(1.0), Value::Number(2.0), Value::Number(4.0)],
+        };
+        let expected_global_count = 2;
+        
+        let output = compiler.compile().expect("Failed to compile");
+        assert_eq!(expected_chunk, output.chunk);
+        assert_eq!(expected_global_count, output.globals_count);
+    }
+
+    #[test]
+    fn error_redeclaration() {
+        let source = r#"
+var g = 1
+var g = 2"#;
+        let compiler = Compiler::new(&source);
+        
+        let output = compiler.compile();
+        assert_eq!(output, None);
+    }
+
+    #[test]
+    /// For now this remains a runtime error
+    fn undefined_variable() {
+        let source = r#"g = 1"#;
+        let compiler = Compiler::new(&source);
+        
+        let expected_chunk = Chunk {
+            bytes: vec![
+                OpCode::Constant.into(),
+                0,
+                OpCode::SetGlobal.into(),
+                0,
+                OpCode::Pop.into(),
+                OpCode::Return.into()
+            ],
+            lines: vec![1, 1, 1, 1, 1, 1],
+            constants: vec![Value::Number(1.0)],
+        };
+        let expected_global_count = 1;
+
+        let output = compiler.compile().expect("Failed to compile");
+        assert_eq!(expected_chunk, output.chunk);
+        assert_eq!(expected_global_count, output.globals_count);
+    }
+
+    #[test]
+    fn chained_assignment() {
+        let source = r#"
+var a = 1
+var b
+var c = b = a"#;
+        let compiler = Compiler::new(&source);
+        
+        let expected_chunk = Chunk {
+            bytes: vec![
+                OpCode::Constant.into(),
+                0,
+                OpCode::DefineGlobal.into(),
+                0,
+                OpCode::Null.into(),
+                OpCode::DefineGlobal.into(),
+                1,
+                OpCode::GetGlobal.into(),
+                0,
+                OpCode::SetGlobal.into(),
+                1,
+                OpCode::DefineGlobal.into(),
+                2,
+                OpCode::Return.into()
+            ],
+            lines: vec![2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4],
+            constants: vec![Value::Number(1.0)],
+        };
+        let expected_global_count = 3;
+
+        let output = compiler.compile().expect("Failed to compile");
+        assert_eq!(expected_chunk, output.chunk);
+        assert_eq!(expected_global_count, output.globals_count);
+    }
 }

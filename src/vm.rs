@@ -105,7 +105,7 @@ impl VM {
         return self.globals[index];
     }
     fn write_global(&mut self) {
-        let val = self.stack.pop().unwrap();
+        let val = *self.stack.last().unwrap();
         let index = self.read_byte() as usize;
         self.globals[index] = Some(val);
     }
