@@ -12,6 +12,10 @@
 - [ ] Control flow
 - [ ] Locals
 
+## Improvements
+
+- [ ] Define global and set global are the same, remove define.
+
 **Static Typing**
 
 - This matters now since it either may change how the compiler is structured completely OR it'll change how globals work. 2 Pass will be easier to type check over patching.
