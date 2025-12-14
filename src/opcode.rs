@@ -13,7 +13,9 @@ pub enum OpCode {
     Multiply,
     Divide,
     Negate,
-    Return
+    Return,
+    Null,
+    DefineGlobal
 }
 
 impl From::<OpCode> for u8 {
@@ -32,6 +34,8 @@ impl From::<OpCode> for u8 {
             OpCode::Divide => 10,
             OpCode::Negate => 11,
             OpCode::Return => 12,
+            OpCode::Null => 13,
+            OpCode::DefineGlobal => 14,
         }
     }
 }
@@ -54,6 +58,8 @@ impl TryFrom::<u8> for OpCode {
             10 => Ok(OpCode::Divide),
             11 => Ok(OpCode::Negate),
             12 => Ok(OpCode::Return),
+            13 => Ok(OpCode::Null),
+            14 => Ok(OpCode::DefineGlobal),
             _ => Err("Failed to convert u8 to ParsePrecedence")
         }
     }

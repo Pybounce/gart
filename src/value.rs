@@ -3,7 +3,8 @@ use std::fmt::Display;
  #[derive(Clone, Copy, PartialEq, Debug)]
  pub enum Value {
     Bool(bool),
-    Number(f64)
+    Number(f64),
+    Null
  }
 
  impl Display for Value {
@@ -11,6 +12,7 @@ use std::fmt::Display;
         match self {
             Value::Bool(v) => write!(f, "{}", v),
             Value::Number(v) => write!(f, "{}", v),
+            Value::Null => write!(f, "NULL"),
         }
     }
  }

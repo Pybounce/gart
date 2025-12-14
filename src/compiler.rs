@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{chunk::Chunk, opcode::OpCode, parse::{ParseFn, ParsePrecedence, ParseRule}, scanner::Scanner, token::{Token, TokenType}, value::Value};
 
 
@@ -9,6 +11,13 @@ pub struct Compiler<'a> {
     current_token: Token,
     had_error: bool,
     panic_mode: bool,
+    globals_state: HashMap<&'a str, (u8, bool, Vec<Token>)>
+}
+
+#[derive(PartialEq, Debug)]
+pub struct CompilerOutput {
+    pub chunk: Chunk,
+    pub globals_count: usize
 }
 
 impl<'a> Compiler<'a> {
@@ -21,9 +30,10 @@ impl<'a> Compiler<'a> {
             current_token: Token::new(TokenType::Error, 0, 0, 0),
             had_error: false,
             panic_mode: false,
+            globals_state: HashMap::new()
         }
     }
-    pub fn compile(mut self) -> Option<Chunk> {
+    pub fn compile(mut self) -> Option<CompilerOutput> {
         self.advance();
         while self.match_token(TokenType::Eof) == false {
             self.declaration();
@@ -31,7 +41,7 @@ impl<'a> Compiler<'a> {
 
         self.finish();
 
-        return (!self.had_error).then(|| self.chunk);
+        return (!self.had_error).then(|| CompilerOutput { chunk: self.chunk, globals_count: self.globals_state.len() });
     }
 
     fn finish(&mut self) {
@@ -39,14 +49,52 @@ impl<'a> Compiler<'a> {
     }
 }
 
+
+
 // Statements/Declarations/Expressions
 impl<'a> Compiler<'a> {
     fn declaration(&mut self) {
         if self.match_token(TokenType::Fn) { todo!(); }
-        else if self.match_token(TokenType::Var) { todo!(); }
+        else if self.match_token(TokenType::Var) { self.var_declaration(); }
         else { self.statement(); }
 
         if self.panic_mode { self.synchronise(); }
+    }
+
+    fn var_declaration(&mut self) {
+        let global_index = self.parse_variable("Expect variable name.", true);
+        if self.match_token(TokenType::Equal) {
+            self.expression();
+        } else {
+            self.emit_op(OpCode::Null);
+        }
+        self.consume(TokenType::NewLine, "Expect newline after expression.");
+        self.emit_op(OpCode::DefineGlobal);
+        self.emit_byte(global_index);
+    }
+
+    fn parse_variable(&mut self, error_msg: &'static str, is_declaration: bool) -> u8 {
+        self.consume(TokenType::Identifier, error_msg);
+        return self.global_identifier(self.previous_token, is_declaration);
+    }
+
+    /// Gets the globals index for the identifier. </br>
+    /// If identifier does not exist in globals, it will add it and return index. </br>
+    fn global_identifier(&mut self, token: Token, is_declaration: bool) -> u8 {
+        let identifier_name = &self.source[token.start..(token.start + token.length)];
+        if let Some((index, declared, tokens_using)) = self.globals_state.get_mut(identifier_name) {
+            if is_declaration { *declared = true; }
+            else { tokens_using.push(token); }
+            return *index;
+        } else {
+            let globals_count = self.globals_state.len() as u8;
+            if globals_count == u8::MAX {
+                self.error_at_previous("Too many globals.");
+                return 0;
+            }
+            self.globals_state.insert(identifier_name, (globals_count, is_declaration, vec![token]));
+            return globals_count;
+        }
     }
 
     fn statement(&mut self) {
@@ -334,7 +382,7 @@ mod test {
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile"));
+        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
     }
 
     #[test]
@@ -368,7 +416,7 @@ mod test {
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile"));
+        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
     }
 
     #[test]
@@ -398,7 +446,7 @@ mod test {
         };
 
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile"));
+        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
     }
 
     #[test]
@@ -418,7 +466,7 @@ mod test {
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile"));
+        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
     }
 
     #[test]
@@ -440,7 +488,7 @@ print 1"#;
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile"));
+        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
     }
 
     #[test]
@@ -461,6 +509,6 @@ print 1"#;
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile"));
+        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
     }
 }

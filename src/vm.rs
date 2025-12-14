@@ -4,7 +4,8 @@ use crate::{chunk::Chunk, compiler::Compiler, opcode::OpCode, value::Value};
 pub struct VM {
     pub pc: usize,
     pub stack: Vec<Value>,
-    pub chunk: Chunk
+    pub chunk: Chunk,
+    pub globals: Vec<Value>
 }
 
 impl VM {
@@ -13,14 +14,16 @@ impl VM {
             pc: 0,
             stack: Vec::new(),
             chunk: Chunk::new_terminated(),
+            globals: Vec::new()
         }
     }
 
     pub fn interpret(&mut self, source: &str) -> bool {
         let compiler = Compiler::new(source);
-        if let Some(chunk) = compiler.compile() {
-            self.chunk = chunk;
+        if let Some(compiler_output) = compiler.compile() {
+            self.chunk = compiler_output.chunk;
             self.pc = 0;
+            self.globals = vec![Value::Null; compiler_output.globals_count];
             return self.run();
         }
 
@@ -60,7 +63,11 @@ impl VM {
                         return false;
                     }
                 },
-                OpCode::Return => return true
+                OpCode::Return => return true,
+                OpCode::Null => self.stack.push(Value::Null),
+                OpCode::DefineGlobal => {
+                    
+                },
             }
         }
     }
@@ -77,6 +84,15 @@ impl VM {
     fn read_constant(&mut self) -> Value {
         let index = self.read_byte() as usize;
         return self.chunk.constants[index];
+    }
+    fn read_global(&mut self) -> Value {
+        let index = self.read_byte() as usize;
+        return self.globals[index];
+    }
+    fn write_global(&mut self) {
+        let val = self.stack.pop().unwrap();
+        let index = self.read_byte() as usize;
+        self.globals[index] = val;
     }
     fn runtime_error(&mut self, message: &'static str) {
         todo!()
