@@ -256,8 +256,6 @@ impl<'a> Scanner<'a> {
                         let current = *self.indent_stack.last().unwrap_or(&0);
                         if let Some(prev_c) = self.previous_token {
                             if prev_c == TokenType::Colon {
-                                println!("col   {}", col);
-                                println!("cur   {}", current);
                                 // target must be > current OR target must be 0
                                 if col <= current {
                                     return self.make_err_token("Must indent the following code after ':'.").into();

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{chunk::Chunk, opcode::OpCode, parse::{ParseFn, ParsePrecedence, ParseRule}, scanner::Scanner, token::{Token, TokenType}, value::Value};
 
 
@@ -9,6 +11,13 @@ pub struct Compiler<'a> {
     current_token: Token,
     had_error: bool,
     panic_mode: bool,
+    globals_state: HashMap<&'a str, (u8, bool, Vec<Token>)>
+}
+
+#[derive(PartialEq, Debug)]
+pub struct CompilerOutput {
+    pub chunk: Chunk,
+    pub globals_count: usize
 }
 
 impl<'a> Compiler<'a> {
@@ -21,9 +30,10 @@ impl<'a> Compiler<'a> {
             current_token: Token::new(TokenType::Error, 0, 0, 0),
             had_error: false,
             panic_mode: false,
+            globals_state: HashMap::new()
         }
     }
-    pub fn compile(mut self) -> Option<Chunk> {
+    pub fn compile(mut self) -> Option<CompilerOutput> {
         self.advance();
         while self.match_token(TokenType::Eof) == false {
             self.declaration();
@@ -31,7 +41,7 @@ impl<'a> Compiler<'a> {
 
         self.finish();
 
-        return (!self.had_error).then(|| self.chunk);
+        return (!self.had_error).then(|| CompilerOutput { chunk: self.chunk, globals_count: self.globals_state.len() });
     }
 
     fn finish(&mut self) {
@@ -39,14 +49,80 @@ impl<'a> Compiler<'a> {
     }
 }
 
+
+
 // Statements/Declarations/Expressions
 impl<'a> Compiler<'a> {
     fn declaration(&mut self) {
         if self.match_token(TokenType::Fn) { todo!(); }
-        else if self.match_token(TokenType::Var) { todo!(); }
+        else if self.match_token(TokenType::Var) { self.var_declaration(); }
         else { self.statement(); }
 
         if self.panic_mode { self.synchronise(); }
+    }
+
+    fn var_declaration(&mut self) {
+        let global_index = self.parse_variable("Expect variable name.", true);
+        if self.match_token(TokenType::Equal) {
+            self.expression();
+        } else {
+            self.emit_op(OpCode::Null);
+        }
+        self.consume(TokenType::NewLine, "Expect newline after expression.");
+        self.emit_op(OpCode::DefineGlobal);
+        self.emit_byte(global_index);
+    }
+
+    fn parse_variable(&mut self, error_msg: &'static str, is_declaration: bool) -> u8 {
+        self.consume(TokenType::Identifier, error_msg);
+        return self.global_identifier(self.previous_token, is_declaration);
+    }
+
+    /// Gets the globals index for the identifier. </br>
+    /// If identifier does not exist in globals, it will add it and return index. </br>
+    fn global_identifier(&mut self, token: Token, is_declaration: bool) -> u8 {
+        let identifier_name = &self.source[token.start..(token.start + token.length)];
+        if let Some((index, declared, tokens_using)) = self.globals_state.get_mut(identifier_name) {
+            if *declared && is_declaration {
+                self.error_at(token, "Aready a global variable with this name.");
+                return 0;
+            }
+            if is_declaration { *declared = true; }
+            else { tokens_using.push(token); }
+            return *index;
+        } else {
+            let globals_count = self.globals_state.len() as u8;
+            if globals_count == u8::MAX {
+                self.error_at_previous("Too many globals.");
+                return 0;
+            }
+            self.globals_state.insert(identifier_name, (globals_count, is_declaration, vec![token]));
+            return globals_count;
+        }
+    }
+
+    fn variable(&mut self, can_assign: bool) {
+        let identifier_token = self.previous_token;
+        let (get_op, set_op, index): (OpCode, OpCode, u8) = match self.local_index() {
+            Some(local_index) => (OpCode::GetLocal, OpCode::SetLocal, local_index),
+            None => (OpCode::GetGlobal, OpCode::SetGlobal, self.global_identifier(identifier_token, false)),
+        };
+
+        if can_assign && self.match_token(TokenType::Equal) {
+            self.expression();
+            self.emit_op(set_op);
+            self.emit_byte(index);
+        }
+        else {
+            self.emit_op(get_op);
+            self.emit_byte(index);
+        }
+    }
+
+    // Tries to find local, returns index if it can. </br>
+    // Returns none otherwise.
+    fn local_index(&self) -> Option<u8> {
+        return None;
     }
 
     fn statement(&mut self) {
@@ -152,7 +228,7 @@ impl<'a> Compiler<'a> {
             ParseFn::Grouping => self.grouping(can_assign),
             ParseFn::Call => todo!(),
             ParseFn::Unary => self.unary(can_assign),
-            ParseFn::Variable => todo!(),
+            ParseFn::Variable => self.variable(can_assign),
             ParseFn::String => todo!(),
             ParseFn::Literal => todo!(),
             ParseFn::And => todo!(),
@@ -334,7 +410,7 @@ mod test {
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile"));
+        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
     }
 
     #[test]
@@ -368,7 +444,7 @@ mod test {
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile"));
+        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
     }
 
     #[test]
@@ -398,7 +474,7 @@ mod test {
         };
 
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile"));
+        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
     }
 
     #[test]
@@ -418,7 +494,7 @@ mod test {
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile"));
+        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
     }
 
     #[test]
@@ -440,7 +516,7 @@ print 1"#;
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile"));
+        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
     }
 
     #[test]
@@ -461,6 +537,141 @@ print 1"#;
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile"));
+        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
+    }
+
+    #[test]
+    fn global_declarations() {
+        let source = r#"
+var g = 1
+var g2 = 2"#;
+        let compiler = Compiler::new(&source);
+
+        let expected_chunk = Chunk {
+            bytes: vec![
+                OpCode::Constant.into(),
+                0,
+                OpCode::DefineGlobal.into(),
+                0,
+                OpCode::Constant.into(),
+                1,
+                OpCode::DefineGlobal.into(),
+                1,
+                OpCode::Return.into()
+            ],
+            lines: vec![2, 2, 2, 2, 3, 3, 3, 3, 3],
+            constants: vec![Value::Number(1.0), Value::Number(2.0)],
+        };
+        let expected_global_count = 2;
+        
+        let output = compiler.compile().expect("Failed to compile");
+        assert_eq!(expected_chunk, output.chunk);
+        assert_eq!(expected_global_count, output.globals_count);
+    }
+
+    #[test]
+    fn global_assignment() {
+        let source = r#"
+var g = 1
+var g2 = 2
+g = 4"#;
+        let compiler = Compiler::new(&source);
+
+        let expected_chunk = Chunk {
+            bytes: vec![
+                OpCode::Constant.into(),
+                0,
+                OpCode::DefineGlobal.into(),
+                0,
+                OpCode::Constant.into(),
+                1,
+                OpCode::DefineGlobal.into(),
+                1,
+                OpCode::Constant.into(),
+                2,
+                OpCode::SetGlobal.into(),
+                0,
+                OpCode::Pop.into(),
+                OpCode::Return.into()
+            ],
+            lines: vec![2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4],
+            constants: vec![Value::Number(1.0), Value::Number(2.0), Value::Number(4.0)],
+        };
+        let expected_global_count = 2;
+        
+        let output = compiler.compile().expect("Failed to compile");
+        assert_eq!(expected_chunk, output.chunk);
+        assert_eq!(expected_global_count, output.globals_count);
+    }
+
+    #[test]
+    fn error_redeclaration() {
+        let source = r#"
+var g = 1
+var g = 2"#;
+        let compiler = Compiler::new(&source);
+        
+        let output = compiler.compile();
+        assert_eq!(output, None);
+    }
+
+    #[test]
+    /// For now this remains a runtime error
+    fn undefined_variable() {
+        let source = r#"g = 1"#;
+        let compiler = Compiler::new(&source);
+        
+        let expected_chunk = Chunk {
+            bytes: vec![
+                OpCode::Constant.into(),
+                0,
+                OpCode::SetGlobal.into(),
+                0,
+                OpCode::Pop.into(),
+                OpCode::Return.into()
+            ],
+            lines: vec![1, 1, 1, 1, 1, 1],
+            constants: vec![Value::Number(1.0)],
+        };
+        let expected_global_count = 1;
+
+        let output = compiler.compile().expect("Failed to compile");
+        assert_eq!(expected_chunk, output.chunk);
+        assert_eq!(expected_global_count, output.globals_count);
+    }
+
+    #[test]
+    fn chained_assignment() {
+        let source = r#"
+var a = 1
+var b
+var c = b = a"#;
+        let compiler = Compiler::new(&source);
+        
+        let expected_chunk = Chunk {
+            bytes: vec![
+                OpCode::Constant.into(),
+                0,
+                OpCode::DefineGlobal.into(),
+                0,
+                OpCode::Null.into(),
+                OpCode::DefineGlobal.into(),
+                1,
+                OpCode::GetGlobal.into(),
+                0,
+                OpCode::SetGlobal.into(),
+                1,
+                OpCode::DefineGlobal.into(),
+                2,
+                OpCode::Return.into()
+            ],
+            lines: vec![2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4],
+            constants: vec![Value::Number(1.0)],
+        };
+        let expected_global_count = 3;
+
+        let output = compiler.compile().expect("Failed to compile");
+        assert_eq!(expected_chunk, output.chunk);
+        assert_eq!(expected_global_count, output.globals_count);
     }
 }

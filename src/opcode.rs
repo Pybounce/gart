@@ -13,7 +13,13 @@ pub enum OpCode {
     Multiply,
     Divide,
     Negate,
-    Return
+    Return,
+    Null,
+    DefineGlobal,
+    SetLocal,
+    GetLocal,
+    SetGlobal,
+    GetGlobal,
 }
 
 impl From::<OpCode> for u8 {
@@ -32,6 +38,12 @@ impl From::<OpCode> for u8 {
             OpCode::Divide => 10,
             OpCode::Negate => 11,
             OpCode::Return => 12,
+            OpCode::Null => 13,
+            OpCode::DefineGlobal => 14,
+            OpCode::SetLocal => 15,
+            OpCode::GetLocal => 16,
+            OpCode::SetGlobal => 17,
+            OpCode::GetGlobal => 18,
         }
     }
 }
@@ -54,6 +66,12 @@ impl TryFrom::<u8> for OpCode {
             10 => Ok(OpCode::Divide),
             11 => Ok(OpCode::Negate),
             12 => Ok(OpCode::Return),
+            13 => Ok(OpCode::Null),
+            14 => Ok(OpCode::DefineGlobal),
+            15 => Ok(OpCode::SetLocal),
+            16 => Ok(OpCode::GetLocal),
+            17 => Ok(OpCode::SetGlobal),
+            18 => Ok(OpCode::GetGlobal),
             _ => Err("Failed to convert u8 to ParsePrecedence")
         }
     }
