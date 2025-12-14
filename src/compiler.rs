@@ -83,6 +83,10 @@ impl<'a> Compiler<'a> {
     fn global_identifier(&mut self, token: Token, is_declaration: bool) -> u8 {
         let identifier_name = &self.source[token.start..(token.start + token.length)];
         if let Some((index, declared, tokens_using)) = self.globals_state.get_mut(identifier_name) {
+            if *declared && is_declaration {
+                self.error_at(token, "Aready a global variable with this name.");
+                return 0;
+            }
             if is_declaration { *declared = true; }
             else { tokens_using.push(token); }
             return *index;
