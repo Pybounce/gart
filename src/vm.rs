@@ -66,7 +66,16 @@ impl VM {
                 OpCode::Return => return true,
                 OpCode::Null => self.stack.push(Value::Null),
                 OpCode::DefineGlobal => {
-                    
+                    self.write_global();
+                },
+                OpCode::SetLocal => todo!(),
+                OpCode::GetLocal => todo!(),
+                OpCode::SetGlobal => {
+                    self.write_global();
+                },
+                OpCode::GetGlobal => {
+                    let global_val = self.read_global();
+                    self.stack.push(global_val);
                 },
             }
         }

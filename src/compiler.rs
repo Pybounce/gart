@@ -97,6 +97,30 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    fn variable(&mut self, can_assign: bool) {
+        let identifier_token = self.previous_token;
+        let (get_op, set_op, index): (OpCode, OpCode, u8) = match self.local_index() {
+            Some(local_index) => (OpCode::GetLocal, OpCode::SetLocal, local_index),
+            None => (OpCode::GetGlobal, OpCode::SetGlobal, self.global_identifier(identifier_token, false)),
+        };
+
+        if can_assign && self.match_token(TokenType::Equal) {
+            self.expression();
+            self.emit_op(set_op);
+            self.emit_byte(index);
+        }
+        else {
+            self.emit_op(get_op);
+            self.emit_byte(index);
+        }
+    }
+
+    // Tries to find local, returns index if it can. </br>
+    // Returns none otherwise.
+    fn local_index(&self) -> Option<u8> {
+        return None;
+    }
+
     fn statement(&mut self) {
         if self.match_token(TokenType::Print) {
             self.print_statement();
@@ -200,7 +224,7 @@ impl<'a> Compiler<'a> {
             ParseFn::Grouping => self.grouping(can_assign),
             ParseFn::Call => todo!(),
             ParseFn::Unary => self.unary(can_assign),
-            ParseFn::Variable => todo!(),
+            ParseFn::Variable => self.variable(can_assign),
             ParseFn::String => todo!(),
             ParseFn::Literal => todo!(),
             ParseFn::And => todo!(),
