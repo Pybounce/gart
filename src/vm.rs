@@ -5,7 +5,7 @@ pub struct VM {
     pub pc: usize,
     pub stack: Vec<Value>,
     pub chunk: Chunk,
-    pub globals: Vec<Value>
+    pub globals: Vec<Option<Value>>
 }
 
 impl VM {
@@ -23,7 +23,7 @@ impl VM {
         if let Some(compiler_output) = compiler.compile() {
             self.chunk = compiler_output.chunk;
             self.pc = 0;
-            self.globals = vec![Value::Null; compiler_output.globals_count];
+            self.globals = vec![None; compiler_output.globals_count];
             return self.run();
         }
 
@@ -74,8 +74,14 @@ impl VM {
                     self.write_global();
                 },
                 OpCode::GetGlobal => {
-                    let global_val = self.read_global();
-                    self.stack.push(global_val);
+                    match self.read_global() {
+                        Some(global_val) => { self.stack.push(global_val); },
+                        None => {
+                            self.runtime_error("Undefined variable.");
+                            return false;
+                        },
+                    }
+                    
                 },
             }
         }
@@ -94,17 +100,21 @@ impl VM {
         let index = self.read_byte() as usize;
         return self.chunk.constants[index];
     }
-    fn read_global(&mut self) -> Value {
+    fn read_global(&mut self) -> Option<Value> {
         let index = self.read_byte() as usize;
         return self.globals[index];
     }
     fn write_global(&mut self) {
         let val = self.stack.pop().unwrap();
         let index = self.read_byte() as usize;
-        self.globals[index] = val;
+        self.globals[index] = Some(val);
     }
     fn runtime_error(&mut self, message: &'static str) {
-        todo!()
+        println!("Runtime error: {}", message);
+        self.reset_stack();
+    }
+    fn reset_stack(&mut self) {
+        self.stack.clear();
     }
     fn binary_number_op<T>(&mut self, apply: T) -> bool where T: Fn(f64, f64) -> Value {
         let b = self.stack.pop().unwrap();

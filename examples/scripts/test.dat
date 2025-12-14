@@ -1,0 +1,7 @@
+var a = 4
+
+var b = a
+
+var c = 3 + b
+
+print c * c
