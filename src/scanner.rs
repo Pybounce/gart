@@ -38,7 +38,11 @@ impl<'a> Scanner<'a> {
         if token.token_type == TokenType::Eof && !matches!(self.previous_token, None | Some(TokenType::NewLine) | Some(TokenType::Dedent)) {
             token = self.make_token(TokenType::NewLine);
         }
-        
+        // If the file ends before resolving all indents
+        if token.token_type == TokenType::Eof && self.indent_stack.len() > 1 {
+            self.indent_target = self.indent_stack[0];
+            return self.scan_token();
+        }
         self.previous_token = token.token_type.into();
         return token;
     }
