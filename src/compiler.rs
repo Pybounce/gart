@@ -129,9 +129,73 @@ impl<'a> Compiler<'a> {
         if self.match_token(TokenType::Print) {
             self.print_statement();
         }
+        else if self.match_token(TokenType::If) {
+            self.if_statement();
+        }
+        else if self.match_token(TokenType::While) {
+            self.while_statement();
+        }
+        else if self.match_token(TokenType::Indent) {
+            self.begin_scope();
+            self.block();
+            self.end_scope();
+        }
         else {
             self.expression_statement();
         }
+    }
+
+    fn if_statement(&mut self) {
+        self.expression();
+        self.consume(TokenType::Colon, "Expect ':' after condition.");
+        self.consume(TokenType::NewLine, "Expect newline after ':'");
+
+        let then_jump = self.emit_jump(OpCode::JumpIfFalse);
+        self.emit_byte(OpCode::Pop);
+        self.statement();
+    
+        let else_jump = self.emit_jump(OpCode::Jump);
+    
+        self.patch_jump(then_jump);
+        self.emit_byte(OpCode::Pop);
+    
+        if self.match_token(TokenType::Else) {
+            if !self.check_token(TokenType::If) { 
+                self.consume(TokenType::Colon, "Expect ':' after 'else'.");
+                self.consume(TokenType::NewLine, "Expect newline after ':'");
+             }
+            self.statement();
+        }
+        self.patch_jump(else_jump);
+    }
+
+    fn while_statement(&mut self) {
+        let jump_landing = self.chunk.bytes.len();
+        self.expression();
+        self.consume(TokenType::Colon, "Expect ':' after condition.");
+        self.consume(TokenType::NewLine, "Expect newline after ':'");
+        let loop_break_jump = self.emit_jump(OpCode::JumpIfFalse);
+        self.emit_byte(OpCode::Pop);
+        self.statement();
+        self.emit_back_jump(jump_landing);
+
+        self.patch_jump(loop_break_jump);
+        self.emit_byte(OpCode::Pop);
+    }
+
+    fn block(&mut self) {
+        while !self.check_token(TokenType::Dedent) && !self.check_token(TokenType::Eof) {
+            self.declaration();
+        }
+        self.consume(TokenType::Dedent, "Expect dedent after block.");
+    }
+
+    fn begin_scope(&mut self) {
+
+    }
+
+    fn end_scope(&mut self) {
+
     }
 
     fn print_statement(&mut self) {
@@ -184,6 +248,32 @@ impl<'a> Compiler<'a> {
         
     }
 
+    fn and(&mut self, can_assign: bool) {
+        let jump = self.emit_jump(OpCode::JumpIfFalse);
+        self.emit_byte(OpCode::Pop);
+        self.parse_precedence(ParsePrecedence::And);
+        self.patch_jump(jump);
+    }
+
+    fn or(&mut self, can_assign: bool) {
+        let hop = self.emit_jump(OpCode::JumpIfFalse);
+        let end_jump = self.emit_jump(OpCode::Jump);
+        self.patch_jump(hop);
+
+        self.emit_byte(OpCode::Pop);
+        self.parse_precedence(ParsePrecedence::Or);
+        self.patch_jump(end_jump);
+    }
+
+    fn literal(&mut self, can_assign: bool) {
+        match self.previous_token.token_type {
+            TokenType::True => self.emit_byte(OpCode::True),
+            TokenType::False => self.emit_byte(OpCode::False),
+            TokenType::Null => self.emit_byte(OpCode::Null),
+            _ => return
+        }
+    }
+
     fn grouping(&mut self, can_assign: bool) {
         self.expression();
         self.consume(TokenType::RightParen, "Expect ')' after expression.");
@@ -230,9 +320,9 @@ impl<'a> Compiler<'a> {
             ParseFn::Unary => self.unary(can_assign),
             ParseFn::Variable => self.variable(can_assign),
             ParseFn::String => todo!(),
-            ParseFn::Literal => todo!(),
-            ParseFn::And => todo!(),
-            ParseFn::Or => todo!(),
+            ParseFn::Literal => self.literal(can_assign),
+            ParseFn::And => self.and(can_assign),
+            ParseFn::Or => self.or(can_assign),
         };
     }
 
@@ -290,8 +380,8 @@ impl<'a> Compiler<'a> {
         self.emit_op(op2);
     }
     
-    fn emit_byte(&mut self, byte: u8) {
-        self.chunk.write_byte(byte, self.previous_token.line);
+    fn emit_byte(&mut self, byte: impl Into<u8>) {
+        self.chunk.write_byte(byte.into(), self.previous_token.line);
     }
 
     fn emit_constant(&mut self, value: Value) {
@@ -309,6 +399,29 @@ impl<'a> Compiler<'a> {
             self.error_at_current("Too many constants in one chunk. Max 256.");
             return 0;
         }
+    }
+
+    fn emit_back_jump(&mut self, landing: usize) {
+        self.emit_byte(OpCode::JumpBack);
+        let jump = self.chunk.bytes.len() - landing + 2;
+        if jump > u16::MAX.into() { self.error_at_current("Too much code to jump over."); }
+        self.emit_byte(((jump >> 8) & 0xff) as u8);
+        self.emit_byte((jump & 0xff) as u8);
+    }
+
+    fn emit_jump(&mut self, jump_op: OpCode) -> usize {
+        self.emit_op(jump_op);
+        self.emit_byte(0);
+        self.emit_byte(0);
+        return self.chunk.bytes.len() - 2;
+    }
+
+    fn patch_jump(&mut self, offset: usize) {
+        let jump = self.chunk.bytes.len() - offset - 2;
+
+        if jump > u16::MAX.into() { self.error_at_current("Too much code to jump over."); }
+        self.chunk.bytes[offset] = ((jump >> 8) & 0xff) as u8;
+        self.chunk.bytes[offset + 1] = (jump & 0xff) as u8;
     }
 }
 

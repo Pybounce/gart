@@ -15,6 +15,18 @@
 ## Improvements
 
 - [ ] Define global and set global are the same, remove define.
+- [ ] Use impl Into<u8> for writing bytes etc
+- [ ] Jump unit tests
+  - Tests to ensure it jumps by the correct amount etc.
+
+## Tests
+
+- [ ] NOT operator
+  - <= >= != etc
+- [ ] If/Else statements
+- [ ] While loops
+- [ ] Literals (true/false/null)
+- [ ] and/or
 
 **Static Typing**
 

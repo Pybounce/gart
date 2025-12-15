@@ -46,8 +46,16 @@ impl VM {
                     println!("{}", self.stack.pop().unwrap())
                 },
                 OpCode::Pop => { self.stack.pop(); },
-                OpCode::Equal => todo!(),
-                OpCode::Not => todo!(),
+                OpCode::Equal => {
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+                    self.stack.push(Value::Bool(a == b));
+                },
+                OpCode::Not => {
+                    let val = self.stack.pop().unwrap();
+                    let not_val = self.is_falsey(val);
+                    self.stack.push(Value::Bool(not_val));
+                },
                 OpCode::Greater => { if !self.binary_number_op(|a, b| Value::Bool(a > b)) { return false; } },
                 OpCode::Less => { if !self.binary_number_op(|a, b| Value::Bool(a < b)) { return false; } },
                 OpCode::Add => { if !self.binary_number_op(|a, b| Value::Number(a + b)) { return false; } },
@@ -81,8 +89,24 @@ impl VM {
                             return false;
                         },
                     }
-                    
+    
                 },
+                OpCode::JumpIfFalse => {
+                    let jump = self.read_short() as usize;
+                    if self.is_falsey(*self.stack.last().unwrap()) {
+                        self.pc += jump;
+                    }
+                },
+                OpCode::Jump => {
+                    let jump = self.read_short() as usize;
+                    self.pc += jump;
+                },
+                OpCode::JumpBack => {
+                    let jump = self.read_short() as usize;
+                    self.pc -= jump;
+                },
+                OpCode::True => self.stack.push(Value::Bool(true)),
+                OpCode::False => self.stack.push(Value::Bool(false)),
             }
         }
     }
@@ -95,6 +119,13 @@ impl VM {
         let byte = self.chunk.bytes[self.pc];
         self.pc += 1;
         return byte;
+    }
+    fn read_short(&mut self) -> u16 {
+        self.pc += 2;
+        let high = self.chunk.bytes[self.pc - 2] as u16;
+        let low = self.chunk.bytes[self.pc - 1] as u16;
+        return (high << 8) | low;
+
     }
     fn read_constant(&mut self) -> Value {
         let index = self.read_byte() as usize;
@@ -130,4 +161,7 @@ impl VM {
              }
         }
     } 
+    fn is_falsey(&self, val: Value) -> bool {
+        return val == Value::Null || val == Value::Bool(false);
+    }
 }

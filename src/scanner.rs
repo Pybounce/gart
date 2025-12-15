@@ -38,7 +38,11 @@ impl<'a> Scanner<'a> {
         if token.token_type == TokenType::Eof && !matches!(self.previous_token, None | Some(TokenType::NewLine) | Some(TokenType::Dedent)) {
             token = self.make_token(TokenType::NewLine);
         }
-        
+        // If the file ends before resolving all indents
+        if token.token_type == TokenType::Eof && self.indent_stack.len() > 1 {
+            self.indent_target = self.indent_stack[0];
+            return self.scan_token();
+        }
         self.previous_token = token.token_type.into();
         return token;
     }
@@ -451,6 +455,36 @@ if x == 42:
             Token::new(TokenType::Dedent, 81, 0, 7),
 
             Token::new(TokenType::Eof, 81, 0, 7),
+        ];
+
+        for (i, expected_token) in expected_tokens.iter().enumerate() {
+            assert_eq!(*expected_token, scanner.scan_token(), "Token Index: {}", i);
+        }
+    }
+
+    #[test]
+    fn unresolved_indents_at_eof() {
+        let source = r#"
+if x <= 1:
+    print "x greater than 1""#;
+
+        let mut scanner = Scanner::new(&source);
+
+        let expected_tokens = vec![
+            Token::new(TokenType::If, 1, 2, 2),
+            Token::new(TokenType::Identifier, 4, 1, 2),
+            Token::new(TokenType::LessEqual, 6, 2, 2),
+            Token::new(TokenType::Number, 9, 1, 2),
+            Token::new(TokenType::Colon, 10, 1, 2),
+            Token::new(TokenType::NewLine, 11, 1, 2),
+
+            Token::new(TokenType::Indent, 12, 4, 3),
+            Token::new(TokenType::Print, 16, 5, 3),
+            Token::new(TokenType::String, 22, 18, 3),
+            Token::new(TokenType::NewLine, 40, 0, 3),
+            Token::new(TokenType::Dedent, 40, 0, 3),
+
+            Token::new(TokenType::Eof, 40, 0, 3),
         ];
 
         for (i, expected_token) in expected_tokens.iter().enumerate() {
