@@ -20,6 +20,8 @@ pub enum OpCode {
     GetLocal,
     SetGlobal,
     GetGlobal,
+    JumpIfFalse,
+    Jump,
 }
 
 impl From::<OpCode> for u8 {
@@ -44,6 +46,8 @@ impl From::<OpCode> for u8 {
             OpCode::GetLocal => 16,
             OpCode::SetGlobal => 17,
             OpCode::GetGlobal => 18,
+            OpCode::JumpIfFalse => 19,
+            OpCode::Jump => 20,
         }
     }
 }
@@ -72,6 +76,8 @@ impl TryFrom::<u8> for OpCode {
             16 => Ok(OpCode::GetLocal),
             17 => Ok(OpCode::SetGlobal),
             18 => Ok(OpCode::GetGlobal),
+            19 => Ok(OpCode::JumpIfFalse),
+            20 => Ok(OpCode::Jump),
             _ => Err("Failed to convert u8 to ParsePrecedence")
         }
     }

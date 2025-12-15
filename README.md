@@ -15,6 +15,9 @@
 ## Improvements
 
 - [ ] Define global and set global are the same, remove define.
+- [ ] Use impl Into<u8> for writing bytes etc
+- [ ] Jump unit tests
+  - Tests to ensure it jumps by the correct amount etc.
 
 **Static Typing**
 

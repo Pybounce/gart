@@ -81,7 +81,17 @@ impl VM {
                             return false;
                         },
                     }
-                    
+    
+                },
+                OpCode::JumpIfFalse => {
+                    let jump = self.read_short() as usize;
+                    if self.is_falsey(*self.stack.last().unwrap()) {
+                        self.pc += jump;
+                    }
+                },
+                OpCode::Jump => {
+                    let jump = self.read_short() as usize;
+                    self.pc += jump;
                 },
             }
         }
@@ -95,6 +105,13 @@ impl VM {
         let byte = self.chunk.bytes[self.pc];
         self.pc += 1;
         return byte;
+    }
+    fn read_short(&mut self) -> u16 {
+        self.pc += 2;
+        let high = self.chunk.bytes[self.pc - 2] as u16;
+        let low = self.chunk.bytes[self.pc - 1] as u16;
+        return (high << 8) | low;
+
     }
     fn read_constant(&mut self) -> Value {
         let index = self.read_byte() as usize;
@@ -130,4 +147,7 @@ impl VM {
              }
         }
     } 
+    fn is_falsey(&self, val: Value) -> bool {
+        return val == Value::Null || val == Value::Bool(false);
+    }
 }
