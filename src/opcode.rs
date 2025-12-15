@@ -22,6 +22,7 @@ pub enum OpCode {
     GetGlobal,
     JumpIfFalse,
     Jump,
+    JumpBack,
 }
 
 impl From::<OpCode> for u8 {
@@ -48,6 +49,7 @@ impl From::<OpCode> for u8 {
             OpCode::GetGlobal => 18,
             OpCode::JumpIfFalse => 19,
             OpCode::Jump => 20,
+            OpCode::JumpBack => 21,
         }
     }
 }
@@ -78,6 +80,7 @@ impl TryFrom::<u8> for OpCode {
             18 => Ok(OpCode::GetGlobal),
             19 => Ok(OpCode::JumpIfFalse),
             20 => Ok(OpCode::Jump),
+            21 => Ok(OpCode::JumpBack),
             _ => Err("Failed to convert u8 to ParsePrecedence")
         }
     }

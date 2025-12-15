@@ -93,6 +93,10 @@ impl VM {
                     let jump = self.read_short() as usize;
                     self.pc += jump;
                 },
+                OpCode::JumpBack => {
+                    let jump = self.read_short() as usize;
+                    self.pc -= jump;
+                },
             }
         }
     }

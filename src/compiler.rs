@@ -132,6 +132,9 @@ impl<'a> Compiler<'a> {
         else if self.match_token(TokenType::If) {
             self.if_statement();
         }
+        else if self.match_token(TokenType::While) {
+            self.while_statement();
+        }
         else if self.match_token(TokenType::Indent) {
             self.begin_scope();
             self.block();
@@ -164,6 +167,20 @@ impl<'a> Compiler<'a> {
             self.statement();
         }
         self.patch_jump(else_jump);
+    }
+
+    fn while_statement(&mut self) {
+        let jump_landing = self.chunk.bytes.len();
+        self.expression();
+        self.consume(TokenType::Colon, "Expect ':' after condition.");
+        self.consume(TokenType::NewLine, "Expect newline after ':'");
+        let loop_break_jump = self.emit_jump(OpCode::JumpIfFalse);
+        self.emit_byte(OpCode::Pop);
+        self.statement();
+        self.emit_back_jump(jump_landing);
+
+        self.patch_jump(loop_break_jump);
+        self.emit_byte(OpCode::Pop);
     }
 
     fn block(&mut self) {
@@ -356,6 +373,14 @@ impl<'a> Compiler<'a> {
             self.error_at_current("Too many constants in one chunk. Max 256.");
             return 0;
         }
+    }
+
+    fn emit_back_jump(&mut self, landing: usize) {
+        self.emit_byte(OpCode::JumpBack);
+        let jump = self.chunk.bytes.len() - landing + 2;
+        if jump > u16::MAX.into() { self.error_at_current("Too much code to jump over."); }
+        self.emit_byte(((jump >> 8) & 0xff) as u8);
+        self.emit_byte((jump & 0xff) as u8);
     }
 
     fn emit_jump(&mut self, jump_op: OpCode) -> usize {
