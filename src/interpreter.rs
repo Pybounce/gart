@@ -1,4 +1,4 @@
-use crate::{compiler::{Compiler, CompilerError}, vm::{RuntimeError, VM}};
+use crate::{compiler::{Compiler}, vm::{VM}};
 
 pub struct Interpreter {
     source: String
@@ -11,6 +11,16 @@ pub enum InterpretResult {
     RuntimeErr(RuntimeError)
 }
 
+pub struct RuntimeError {
+    pub message: &'static str
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CompilerError {
+    pub line: usize,
+    pub start: usize,
+    pub len: usize
+}
 
 impl Interpreter {
     pub fn new(source: String) -> Self {

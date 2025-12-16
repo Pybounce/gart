@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{chunk::Chunk, opcode::OpCode, parse::{ParseFn, ParsePrecedence, ParseRule}, scanner::Scanner, token::{Token, TokenType}, value::Value};
+use crate::{chunk::Chunk, interpreter::CompilerError, opcode::OpCode, parse::{ParseFn, ParsePrecedence, ParseRule}, scanner::Scanner, token::{Token, TokenType}, value::Value};
 
 
 pub struct Compiler<'a> {
@@ -15,12 +15,7 @@ pub struct Compiler<'a> {
     globals_state: HashMap<&'a str, (u8, bool, Vec<Token>)>
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct CompilerError {
-    pub line: usize,
-    pub start: usize,
-    pub len: usize
-}
+
 
 #[derive(PartialEq, Debug)]
 pub struct CompilerOutput {

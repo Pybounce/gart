@@ -1,4 +1,4 @@
-use crate::{chunk::Chunk, compiler::{Compiler, CompilerOutput}, opcode::OpCode, value::Value};
+use crate::{chunk::Chunk, compiler::{Compiler, CompilerOutput}, interpreter::RuntimeError, opcode::OpCode, value::Value};
 
 
 pub struct VM {
@@ -8,9 +8,7 @@ pub struct VM {
     pub globals: Vec<Option<Value>>
 }
 
-pub struct RuntimeError {
-    pub message: &'static str
-}
+
 
 impl VM {
     pub fn new() -> Self {
