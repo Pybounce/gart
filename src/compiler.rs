@@ -12,10 +12,16 @@ pub struct Compiler<'a> {
     had_error: bool,
     panic_mode: bool,
     errors: Vec<CompilerError>,
-    globals_state: HashMap<&'a str, (u8, bool, Vec<Token>)>
+    globals_state: HashMap<&'a str, (u8, bool, Vec<Token>)>,
+    locals: Vec<Local>,
+    scope_depth: usize
 }
 
-
+#[derive(Clone, Copy)]
+struct Local {
+    token: Token,
+    depth: i32
+}
 
 #[derive(PartialEq, Debug)]
 pub struct CompilerOutput {
@@ -34,7 +40,9 @@ impl<'a> Compiler<'a> {
             had_error: false,
             panic_mode: false,
             errors: vec![],
-            globals_state: HashMap::new()
+            globals_state: HashMap::new(),
+            locals: vec![],
+            scope_depth: 0
         }
     }
     pub fn compile(mut self) -> Result<CompilerOutput, Vec<CompilerError>> {
@@ -68,7 +76,48 @@ impl<'a> Compiler<'a> {
     }
 
     fn var_declaration(&mut self) {
-        let global_index = self.parse_variable("Expect variable name.", true);
+        self.consume(TokenType::Identifier, "Expect variable name.");
+        if self.scope_depth == 0 {
+            self.var_global();
+        }
+        else {
+            self.var_local();
+        }
+    }
+
+    fn var_local(&mut self) {
+        let new_local = self.previous_token;
+
+        for i in (0..self.locals.len()).rev() {
+            let local = self.locals[i];
+            if local.depth != -1 && local.depth < self.scope_depth as i32 { break; }
+
+            if self.identifiers_equal(local.token, new_local) {
+                self.error_at_current("Already a variable with this name in scope.");
+                break;
+            }
+        }
+
+        if self.locals.len() == u8::MAX as usize{
+            self.error_at_current("Local variable count has been exceeded.");
+        }
+        self.locals.push(Local { token: new_local, depth: -1 });
+
+        if self.match_token(TokenType::Equal) {
+            self.expression();
+        } else {
+            self.emit_op(OpCode::Null);
+        }
+        self.consume(TokenType::NewLine, "Expect newline after expression.");
+
+        if let Some(local) = self.locals.last_mut() {
+            local.depth = self.scope_depth as i32;
+        }
+    }
+
+    fn var_global(&mut self) {
+        let global_index = self.global_identifier(self.previous_token, true);
+
         if self.match_token(TokenType::Equal) {
             self.expression();
         } else {
@@ -79,9 +128,11 @@ impl<'a> Compiler<'a> {
         self.emit_byte(global_index);
     }
 
-    fn parse_variable(&mut self, error_msg: &'static str, is_declaration: bool) -> u8 {
-        self.consume(TokenType::Identifier, error_msg);
-        return self.global_identifier(self.previous_token, is_declaration);
+    fn identifiers_equal(&self, a: Token, b: Token) -> bool {
+        if a.length != b.length { return false; }
+        let a_str = &self.source[a.start..(a.start + a.length)];
+        let b_str = &self.source[b.start..(b.start + b.length)];
+        return a_str == b_str;
     }
 
     /// Gets the globals index for the identifier. </br>
@@ -109,7 +160,7 @@ impl<'a> Compiler<'a> {
 
     fn variable(&mut self, can_assign: bool) {
         let identifier_token = self.previous_token;
-        let (get_op, set_op, index): (OpCode, OpCode, u8) = match self.local_index() {
+        let (get_op, set_op, index): (OpCode, OpCode, u8) = match self.local_index(identifier_token) {
             Some(local_index) => (OpCode::GetLocal, OpCode::SetLocal, local_index),
             None => (OpCode::GetGlobal, OpCode::SetGlobal, self.global_identifier(identifier_token, false)),
         };
@@ -127,7 +178,16 @@ impl<'a> Compiler<'a> {
 
     // Tries to find local, returns index if it can. </br>
     // Returns none otherwise.
-    fn local_index(&self) -> Option<u8> {
+    fn local_index(&mut self, identifier_token: Token) -> Option<u8> {
+        for i in (0..self.locals.len()).rev() {
+            let local = self.locals[i];
+            if self.identifiers_equal(local.token, identifier_token) {
+                if local.depth == -1 { 
+                    self.error_at_current("Can't read local variable in it's own initialiser.");
+                }
+                return Some(i as u8);
+            }
+        }
         return None;
     }
 
@@ -197,11 +257,16 @@ impl<'a> Compiler<'a> {
     }
 
     fn begin_scope(&mut self) {
-
+        self.scope_depth += 1;
     }
 
     fn end_scope(&mut self) {
-
+        self.scope_depth -= 1;
+        while let Some(local) = self.locals.last() {
+            if local.depth <= self.scope_depth as i32 { break; }
+            self.locals.pop();
+            self.emit_byte(OpCode::Pop);
+        }
     }
 
     fn print_statement(&mut self) {

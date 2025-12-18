@@ -24,6 +24,7 @@
 - [ ] Literals (true/false/null)
 - [ ] and/or
 - [ ] Jump
+- [ ] Locals
 
 **Static Typing**
 

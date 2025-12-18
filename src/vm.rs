@@ -73,8 +73,16 @@ impl VM {
                 OpCode::DefineGlobal => {
                     self.write_global();
                 },
-                OpCode::SetLocal => todo!(),
-                OpCode::GetLocal => todo!(),
+                OpCode::SetLocal => {
+                    let local_stack_index = self.read_byte();
+                    let val = self.stack.last().unwrap();
+                    self.stack[local_stack_index as usize] = *val;
+                },
+                OpCode::GetLocal => {
+                    let local_stack_index = self.read_byte();
+                    let val = self.stack[local_stack_index as usize];
+                    self.stack.push(val);
+                },
                 OpCode::SetGlobal => {
                     self.write_global();
                 },
