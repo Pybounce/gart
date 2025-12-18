@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{chunk::Chunk, compiler::{Compiler, CompilerOutput}, interpreter::RuntimeError, opcode::OpCode, value::Value};
 
 
@@ -50,12 +52,17 @@ impl VM {
                 },
                 OpCode::Not => {
                     let val = self.stack.pop().unwrap();
-                    let not_val = self.is_falsey(val);
+                    let not_val = self.is_falsey(&val);
                     self.stack.push(Value::Bool(not_val));
                 },
                 OpCode::Greater => { if let Err(e) = self.binary_number_op(|a, b| Value::Bool(a > b)) { return Err(e); } },
                 OpCode::Less => { if let Err(e) = self.binary_number_op(|a, b| Value::Bool(a < b)) { return Err(e); } },
-                OpCode::Add => { if let Err(e) = self.binary_number_op(|a, b| Value::Number(a + b)) { return Err(e); } },
+                OpCode::Add => {
+                    if matches!(&self.stack[self.stack.len() - 1], Value::String(_)) && matches!(&self.stack[self.stack.len() - 2], Value::String(_)) {
+                        if let Err(e) = self.concatenate() { return Err(e); }
+                    }
+                    else if let Err(e) = self.binary_number_op(|a, b| Value::Number(a + b)) { return Err(e); }
+                 },
                 OpCode::Subtract => { if let Err(e) = self.binary_number_op(|a, b| Value::Number(a - b)) { return Err(e); } },
                 OpCode::Multiply => { if let Err(e) = self.binary_number_op(|a, b| Value::Number(a * b)) { return Err(e); } },
                 OpCode::Divide => { if let Err(e) = self.binary_number_op(|a, b| Value::Number(a / b)) { return Err(e); } },
@@ -76,12 +83,12 @@ impl VM {
                 },
                 OpCode::SetLocal => {
                     let local_stack_index = self.read_byte();
-                    let val = self.stack.last().unwrap();
-                    self.stack[local_stack_index as usize] = *val;
+                    let val = self.stack.last().unwrap().clone();
+                    self.stack[local_stack_index as usize] = val;
                 },
                 OpCode::GetLocal => {
                     let local_stack_index = self.read_byte();
-                    let val = self.stack[local_stack_index as usize];
+                    let val = self.stack[local_stack_index as usize].clone();
                     self.stack.push(val);
                 },
                 OpCode::SetGlobal => {
@@ -99,7 +106,7 @@ impl VM {
                 },
                 OpCode::JumpIfFalse => {
                     let jump = self.read_short() as usize;
-                    if self.is_falsey(*self.stack.last().unwrap()) {
+                    if self.is_falsey(self.stack.last().unwrap()) {
                         self.pc += jump;
                     }
                 },
@@ -135,14 +142,14 @@ impl VM {
     }
     fn read_constant(&mut self) -> Value {
         let index = self.read_byte() as usize;
-        return self.chunk.constants[index];
+        return self.chunk.constants[index].clone();
     }
     fn read_global(&mut self) -> Option<Value> {
         let index = self.read_byte() as usize;
-        return self.globals[index];
+        return self.globals[index].clone();
     }
     fn write_global(&mut self) {
-        let val = *self.stack.last().unwrap();
+        let val = self.stack.last().unwrap().clone();
         let index = self.read_byte() as usize;
         self.globals[index] = Some(val);
     }
@@ -165,12 +172,28 @@ impl VM {
                 return Ok(());
             },
             _ => { 
-                let err = self.runtime_error("Add operands must be numbers");
+                let err = self.runtime_error("Add operands must both be strings or numbers");
                 return Err(err);
              }
         }
     } 
-    fn is_falsey(&self, val: Value) -> bool {
-        return val == Value::Null || val == Value::Bool(false);
+
+    fn concatenate(&mut self) -> Result<(), RuntimeError> {
+        let b = self.stack.pop().unwrap();
+        let a = self.stack.pop().unwrap();
+        match (a, b) {
+            (Value::String(str_a), Value::String(str_b)) => {
+                self.stack.push(Value::String(Rc::new(str_a.as_str().to_owned() + str_b.as_str())));
+                return Ok(());
+            },
+            _ => { 
+                let err = self.runtime_error("Add operands must both be strings or numbers");
+                return Err(err);
+             }
+        }    
+    }
+
+    fn is_falsey(&self, val: &Value) -> bool {
+        return *val == Value::Null || *val == Value::Bool(false);
     }
 }

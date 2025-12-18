@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{chunk::Chunk, interpreter::CompilerError, opcode::OpCode, parse::{ParseFn, ParsePrecedence, ParseRule}, scanner::Scanner, token::{Token, TokenType}, value::Value};
 
@@ -295,6 +295,11 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    fn string(&mut self, can_assign: bool) {
+        let val = &self.source[(self.previous_token.start + 1)..(self.previous_token.length + self.previous_token.start - 1)];
+        self.emit_constant(Value::String(Rc::new(val.to_owned())));
+    }
+
     fn binary(&mut self, can_assign: bool) {
         let operator = self.previous_token.token_type;
         let operator_rule_prec = self.get_rule(operator).precedence;
@@ -390,7 +395,7 @@ impl<'a> Compiler<'a> {
             ParseFn::Call => todo!(),
             ParseFn::Unary => self.unary(can_assign),
             ParseFn::Variable => self.variable(can_assign),
-            ParseFn::String => todo!(),
+            ParseFn::String => self.string(can_assign),
             ParseFn::Literal => self.literal(can_assign),
             ParseFn::And => self.and(can_assign),
             ParseFn::Or => self.or(can_assign),
