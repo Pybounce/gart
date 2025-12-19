@@ -58,10 +58,11 @@ impl<'a> Compiler<'a> {
             panic_mode: false,
             errors: vec![],
             globals_state: HashMap::new(),
-            funpiler_stack: vec![Funpiler::new()]
+            funpiler_stack: vec![]
         }
     }
     pub fn compile(mut self) -> Result<CompilerOutput, Vec<CompilerError>> {
+        self.new_funpiler();
         self.advance();
         while self.match_token(TokenType::Eof) == false {
             self.declaration();
@@ -106,8 +107,16 @@ impl<'a> Compiler<'a> {
         self.emit_byte(global_index);
     }
 
-    fn function(&mut self) -> Function {
+    fn new_funpiler(&mut self) {
         self.funpiler_stack.push(Funpiler::new());
+        self.funpiler().locals.push(Local {
+            token: Token::new(TokenType::Null, 0, 0, 0),
+            depth: 0,
+        });
+    }
+
+    fn function(&mut self) -> Function {
+        self.new_funpiler();
         self.begin_scope();
 
         self.consume(TokenType::LeftParen, "Expect '(' after function name.");
@@ -158,6 +167,30 @@ impl<'a> Compiler<'a> {
         };
         return function;
         
+    }
+
+    fn arguments(&mut self) -> u8 {
+        let mut arg_count: u8 = 0;
+        if !self.check_token(TokenType::RightParen) {
+            loop {
+                if arg_count == u8::MAX {
+                    self.error_at_current("Cannot have more than 255 arguments");
+                    break;
+                }
+                self.expression();
+                arg_count += 1;
+                if !self.match_token(TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+        self.consume(TokenType::RightParen, "Expect ')' after arguments.");
+        return arg_count;
+    }
+
+    fn call(&mut self) {
+        let arg_count = self.arguments();
+        self.emit_bytes(OpCode::Call, arg_count)
     }
 
     fn var_declaration(&mut self) {
@@ -284,6 +317,9 @@ impl<'a> Compiler<'a> {
         else if self.match_token(TokenType::If) {
             self.if_statement();
         }
+        else if self.match_token(TokenType::Return) {
+            self.return_statement();
+        }
         else if self.match_token(TokenType::While) {
             self.while_statement();
         }
@@ -294,6 +330,21 @@ impl<'a> Compiler<'a> {
         }
         else {
             self.expression_statement();
+        }
+    }
+
+    fn return_statement(&mut self) {
+        if self.funpiler_stack.len() <= 1 {
+            self.error_at_current("Cannot return from top-level code.");
+        }
+
+        if self.match_token(TokenType::NewLine) {
+            self.emit_bytes(OpCode::Null, OpCode::Return);
+        }
+        else {
+            self.expression();
+            self.consume(TokenType::NewLine, "Expect newline after return value.");
+            self.emit_byte(OpCode::Return);
         }
     }
 
@@ -478,7 +529,7 @@ impl<'a> Compiler<'a> {
             ParseFn::Number => self.number(can_assign),
             ParseFn::Binary => self.binary(can_assign),
             ParseFn::Grouping => self.grouping(can_assign),
-            ParseFn::Call => todo!(),
+            ParseFn::Call => self.call(),
             ParseFn::Unary => self.unary(can_assign),
             ParseFn::Variable => self.variable(can_assign),
             ParseFn::String => self.string(can_assign),
@@ -545,6 +596,11 @@ impl<'a> Compiler<'a> {
     fn emit_byte(&mut self, byte: impl Into<u8>) {
         let line = self.previous_token.line;
         self.funpiler().chunk.write_byte(byte.into(), line);
+    }
+    
+    fn emit_bytes(&mut self, byte1: impl Into<u8>, byte2: impl Into<u8>) {
+        self.emit_byte(byte1);
+        self.emit_byte(byte2);
     }
 
     fn emit_constant(&mut self, value: Value) {

@@ -25,6 +25,7 @@ pub enum OpCode {
     JumpBack,
     True,
     False,
+    Call,
 }
 
 impl From::<OpCode> for u8 {
@@ -53,7 +54,8 @@ impl From::<OpCode> for u8 {
             OpCode::Jump => 20,
             OpCode::JumpBack => 21,
             OpCode::True => 22,
-            OpCode::False => 33,
+            OpCode::False => 23,
+            OpCode::Call => 24,
         }
     }
 }
@@ -87,6 +89,7 @@ impl TryFrom::<u8> for OpCode {
             21 => Ok(OpCode::JumpBack),
             22 => Ok(OpCode::True),
             23 => Ok(OpCode::False),
+            24 => Ok(OpCode::Call),
             _ => Err("Failed to convert u8 to ParsePrecedence")
         }
     }

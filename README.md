@@ -14,6 +14,8 @@
 
 - [ ] Define global and set global are the same, remove define.
 - [ ] Use impl Into<u8> for writing bytes etc
+- [ ] Remove can_assign from most things
+  - Since we just have a match to manually call methods, and those methods don't need the same signature.
 
 ## Tests
 

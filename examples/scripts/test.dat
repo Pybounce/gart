@@ -1,9 +1,9 @@
 var i = 3
 
-fn something():
-    print i
+fn add(a, b):
+    return a + b
 
-print something
+add(1, 2)
 
 
 

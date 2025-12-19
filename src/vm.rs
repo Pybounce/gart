@@ -120,6 +120,9 @@ impl VM {
                 },
                 OpCode::True => self.stack.push(Value::Bool(true)),
                 OpCode::False => self.stack.push(Value::Bool(false)),
+                OpCode::Call => {
+                    println!("CALLING FUNCTION")
+                },
             }
         }
     }
