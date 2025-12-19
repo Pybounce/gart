@@ -23,7 +23,7 @@ impl VM {
     }
 
     pub fn interpret(&mut self, compiler_output: CompilerOutput) -> Result<(), RuntimeError> {
-        self.chunk = compiler_output.chunk;
+        self.chunk = compiler_output.script_function.chunk;
         self.pc = 0;
         self.globals = vec![None; compiler_output.globals_count];
         return self.run();
@@ -75,7 +75,9 @@ impl VM {
                         return Err(err);
                     }
                 },
-                OpCode::Return => return Ok(()),
+                OpCode::Return => {
+                    return Ok(());
+                },
                 OpCode::Null => self.stack.push(Value::Null),
                 OpCode::DefineGlobal => {
                     self.write_global();
@@ -102,7 +104,6 @@ impl VM {
                             return Err(err);
                         },
                     }
-    
                 },
                 OpCode::JumpIfFalse => {
                     let jump = self.read_short() as usize;
@@ -121,7 +122,7 @@ impl VM {
                 OpCode::True => self.stack.push(Value::Bool(true)),
                 OpCode::False => self.stack.push(Value::Bool(false)),
                 OpCode::Call => {
-                    println!("CALLING FUNCTION")
+                    
                 },
             }
         }

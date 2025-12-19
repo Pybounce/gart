@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{backtrace, collections::HashMap, rc::Rc};
 
 use crate::{chunk::Chunk, interpreter::CompilerError, opcode::OpCode, parse::{ParseFn, ParsePrecedence, ParseRule}, scanner::Scanner, token::{Token, TokenType}, value::{Function, Value}};
 
@@ -43,7 +43,7 @@ struct Local {
 
 #[derive(PartialEq, Debug)]
 pub struct CompilerOutput {
-    pub chunk: Chunk,
+    pub script_function: Function,
     pub globals_count: usize
 }
 
@@ -67,12 +67,14 @@ impl<'a> Compiler<'a> {
         while self.match_token(TokenType::Eof) == false {
             self.declaration();
         }
-
         self.finish();
         if self.had_error {
             return Err(self.errors)
         }
-        return Ok(CompilerOutput { chunk: self.funpiler().chunk.clone(), globals_count: self.globals_state.len() });
+
+        let script_function = self.end_funpiler();
+
+        return Ok(CompilerOutput { script_function, globals_count: self.globals_state.len() });
     }
 
     fn finish(&mut self) {
@@ -113,6 +115,16 @@ impl<'a> Compiler<'a> {
             token: Token::new(TokenType::Null, 0, 0, 0),
             depth: 0,
         });
+    }
+
+    fn end_funpiler(&mut self) -> Function {
+        let funpiler = self.funpiler_stack.pop().unwrap();
+        let function = Function {
+            name: funpiler.name,
+            arity: funpiler.arity,
+            chunk: funpiler.chunk,
+        };
+        return function;
     }
 
     fn function(&mut self) -> Function {
@@ -159,13 +171,8 @@ impl<'a> Compiler<'a> {
         self.block();
         self.emit_byte(OpCode::Null);
         self.emit_byte(OpCode::Return);
-        let funpiler = self.funpiler_stack.pop().unwrap();
-        let function = Function {
-            name: funpiler.name,
-            arity: funpiler.arity,
-            chunk: funpiler.chunk,
-        };
-        return function;
+
+        return self.end_funpiler();
         
     }
 
@@ -190,7 +197,7 @@ impl<'a> Compiler<'a> {
 
     fn call(&mut self) {
         let arg_count = self.arguments();
-        self.emit_bytes(OpCode::Call, arg_count)
+        self.emit_bytes(OpCode::Call, arg_count);
     }
 
     fn var_declaration(&mut self) {
@@ -753,7 +760,7 @@ mod test {
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
+        assert_eq!(expected_chunk, output.expect("Failed to compile").script_function.chunk);
     }
 
     #[test]
@@ -787,7 +794,7 @@ mod test {
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
+        assert_eq!(expected_chunk, output.expect("Failed to compile").script_function.chunk);
     }
 
     #[test]
@@ -820,7 +827,7 @@ mod test {
         };
 
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
+        assert_eq!(expected_chunk, output.expect("Failed to compile").script_function.chunk);
     }
 
     #[test]
@@ -840,7 +847,7 @@ mod test {
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
+        assert_eq!(expected_chunk, output.expect("Failed to compile").script_function.chunk);
     }
 
     #[test]
@@ -862,7 +869,7 @@ print 1"#;
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
+        assert_eq!(expected_chunk, output.expect("Failed to compile").script_function.chunk);
     }
 
     #[test]
@@ -883,7 +890,7 @@ print 1"#;
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
+        assert_eq!(expected_chunk, output.expect("Failed to compile").script_function.chunk);
     }
 
     #[test]
@@ -911,7 +918,7 @@ var g2 = 2"#;
         let expected_global_count = 2;
         
         let output = compiler.compile().expect("Failed to compile");
-        assert_eq!(expected_chunk, output.chunk);
+        assert_eq!(expected_chunk, output.script_function.chunk);
         assert_eq!(expected_global_count, output.globals_count);
     }
 
@@ -946,7 +953,7 @@ g = 4"#;
         let expected_global_count = 2;
         
         let output = compiler.compile().expect("Failed to compile");
-        assert_eq!(expected_chunk, output.chunk);
+        assert_eq!(expected_chunk, output.script_function.chunk);
         assert_eq!(expected_global_count, output.globals_count);
     }
 
@@ -985,7 +992,7 @@ var g = 2"#;
         let expected_global_count = 1;
 
         let output = compiler.compile().expect("Failed to compile");
-        assert_eq!(expected_chunk, output.chunk);
+        assert_eq!(expected_chunk, output.script_function.chunk);
         assert_eq!(expected_global_count, output.globals_count);
     }
 
@@ -1020,7 +1027,7 @@ var c = b = a"#;
         let expected_global_count = 3;
 
         let output = compiler.compile().expect("Failed to compile");
-        assert_eq!(expected_chunk, output.chunk);
+        assert_eq!(expected_chunk, output.script_function.chunk);
         assert_eq!(expected_global_count, output.globals_count);
     }
 }
