@@ -203,8 +203,6 @@ impl VM {
     fn write_global(&mut self) {
         let val = self.stack.last().unwrap().clone();
         let index = self.read_byte() as usize;
-        println!("glob write idx {}", index);
-        println!("globs len {}", self.globals.len());
         self.globals[index] = Some(val);
     }
     fn runtime_error(&mut self, message: &'static str) -> RuntimeError {

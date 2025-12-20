@@ -2,9 +2,6 @@
 var a = 1
 
 fn add(a, b):
-    var x = a + b
-    return x
+    return a + b
 
-x = 3
-y = 2
 print add(5, 3)
