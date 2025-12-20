@@ -1,6 +1,9 @@
 var i = 3
 
 fn add(a, b):
-    print 1
+    if a == 1:
+        return a + b
+    return b
 
-add(1, 2, 1, 1, 1)
+var x = add(4, 2)
+print x
