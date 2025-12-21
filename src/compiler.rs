@@ -451,7 +451,7 @@ impl<'a> Compiler<'a> {
         self.parse_precedence(ParsePrecedence::Assignment);
     }
 
-    fn number(&mut self, can_assign: bool) {
+    fn number(&mut self) {
         let lexeme = &self.source[self.previous_token.start..self.previous_token.length + self.previous_token.start];
         if let Ok(number) = lexeme.parse::<f64>() {
             self.emit_constant(Value::Number(number));
@@ -461,12 +461,12 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn string(&mut self, can_assign: bool) {
+    fn string(&mut self) {
         let val = &self.source[(self.previous_token.start + 1)..(self.previous_token.length + self.previous_token.start - 1)];
         self.emit_constant(Value::String(Rc::new(val.to_owned())));
     }
 
-    fn binary(&mut self, can_assign: bool) {
+    fn binary(&mut self) {
         let operator = self.previous_token.token_type;
         let operator_rule_prec = self.get_rule(operator).precedence;
         match ParsePrecedence::try_from(u8::from(operator_rule_prec) + 1) {
@@ -490,14 +490,14 @@ impl<'a> Compiler<'a> {
         
     }
 
-    fn and(&mut self, can_assign: bool) {
+    fn and(&mut self) {
         let jump = self.emit_jump(OpCode::JumpIfFalse);
         self.emit_byte(OpCode::Pop);
         self.parse_precedence(ParsePrecedence::And);
         self.patch_jump(jump);
     }
 
-    fn or(&mut self, can_assign: bool) {
+    fn or(&mut self) {
         let hop = self.emit_jump(OpCode::JumpIfFalse);
         let end_jump = self.emit_jump(OpCode::Jump);
         self.patch_jump(hop);
@@ -507,7 +507,7 @@ impl<'a> Compiler<'a> {
         self.patch_jump(end_jump);
     }
 
-    fn literal(&mut self, can_assign: bool) {
+    fn literal(&mut self) {
         match self.previous_token.token_type {
             TokenType::True => self.emit_byte(OpCode::True),
             TokenType::False => self.emit_byte(OpCode::False),
@@ -516,12 +516,12 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn grouping(&mut self, can_assign: bool) {
+    fn grouping(&mut self) {
         self.expression();
         self.consume(TokenType::RightParen, "Expect ')' after expression.");
     }
 
-    fn unary(&mut self, can_assign: bool) {
+    fn unary(&mut self) {
         let operator = self.previous_token.token_type;
         self.parse_precedence(ParsePrecedence::Unary);
 
@@ -555,16 +555,16 @@ impl<'a> Compiler<'a> {
     fn call_parse_fn(&mut self, parse_fn: ParseFn, can_assign: bool) {
         match parse_fn {
             ParseFn::None => (),
-            ParseFn::Number => self.number(can_assign),
-            ParseFn::Binary => self.binary(can_assign),
-            ParseFn::Grouping => self.grouping(can_assign),
+            ParseFn::Number => self.number(),
+            ParseFn::Binary => self.binary(),
+            ParseFn::Grouping => self.grouping(),
             ParseFn::Call => self.call(),
-            ParseFn::Unary => self.unary(can_assign),
+            ParseFn::Unary => self.unary(),
             ParseFn::Variable => self.variable(can_assign),
-            ParseFn::String => self.string(can_assign),
-            ParseFn::Literal => self.literal(can_assign),
-            ParseFn::And => self.and(can_assign),
-            ParseFn::Or => self.or(can_assign),
+            ParseFn::String => self.string(),
+            ParseFn::Literal => self.literal(),
+            ParseFn::And => self.and(),
+            ParseFn::Or => self.or(),
         };
     }
 
