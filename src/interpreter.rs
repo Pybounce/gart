@@ -1,4 +1,6 @@
-use crate::{compiler::{Compiler}, vm::{VM}};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use crate::{compiler::Compiler, value::{NativeFunction, Value}, vm::VM};
 
 pub struct Interpreter {
     source: String
@@ -29,7 +31,23 @@ impl Interpreter {
         }
     }
     pub fn interpret(&mut self) -> InterpretResult {
-        let compiler = Compiler::new(&self.source);
+        let time_native = NativeFunction {
+            name: "time".to_owned(),
+            arity: 0,
+            function: {
+                fn time_native(_: &[Value]) -> Value {
+                    let secs = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs_f64();
+                    Value::Number(secs)
+                }
+                time_native
+            },
+        };
+        let mut compiler = Compiler::new(&self.source);
+        compiler.add_native(time_native);
+
         match compiler.compile() {
             Ok(compiler_out) => {
                 let mut vm = VM::new();

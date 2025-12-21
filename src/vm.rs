@@ -31,21 +31,10 @@ impl VM {
             stack_offset: 0,
             pc: 0,
         });
-        self.globals = vec![None; compiler_output.globals_count + 1];
-        self.globals[0] = Some(Value::NativeFunc(Rc::new(NativeFunction {
-            name: "time".to_owned(),
-            arity: 0,
-            function: {
-                fn time_native(_: &[Value]) -> Value {
-                    let secs = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs_f64();
-                    Value::Number(secs)
-                }
-                time_native
-            },
-        })));
+        self.globals = vec![None; compiler_output.globals_count];
+        for (i, native) in compiler_output.natives.into_iter().enumerate() {
+            self.globals[i] = Some(Value::NativeFunc(Rc::new(native)));            
+        }
         return self.run();
     }
 

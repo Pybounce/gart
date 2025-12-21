@@ -28,6 +28,8 @@
 - [ ] and/or
 - [ ] Jump
 - [ ] Locals
+- [ ] Natives
+  - Make sure adding a native with the same name overwrites the old one and gives the same index.
 
 **Static Typing**
 

@@ -1,6 +1,6 @@
 use std::{backtrace, collections::HashMap, rc::Rc};
 
-use crate::{chunk::Chunk, interpreter::CompilerError, opcode::OpCode, parse::{ParseFn, ParsePrecedence, ParseRule}, scanner::Scanner, token::{Token, TokenType}, value::{Function, Value}};
+use crate::{chunk::Chunk, interpreter::CompilerError, opcode::OpCode, parse::{ParseFn, ParsePrecedence, ParseRule}, scanner::Scanner, token::{Token, TokenType}, value::{Function, NativeFunction, Value}};
 
 
 pub struct Compiler<'a> {
@@ -11,8 +11,10 @@ pub struct Compiler<'a> {
     had_error: bool,
     panic_mode: bool,
     errors: Vec<CompilerError>,
-    globals_state: HashMap<&'a str, (u8, bool, Vec<Token>)>,
-    funpiler_stack: Vec<Funpiler>
+    globals_state: HashMap<String, (u8, bool, Vec<Token>)>,
+    funpiler_stack: Vec<Funpiler>,
+    natives: Vec<NativeFunction>,
+
 }
 
 struct Funpiler {
@@ -44,7 +46,8 @@ struct Local {
 #[derive(PartialEq, Debug)]
 pub struct CompilerOutput {
     pub script_function: Function,
-    pub globals_count: usize
+    pub globals_count: usize,
+    pub natives: Vec<NativeFunction>,
 }
 
 impl<'a> Compiler<'a> {
@@ -58,7 +61,20 @@ impl<'a> Compiler<'a> {
             panic_mode: false,
             errors: vec![],
             globals_state: HashMap::new(),
+            natives: vec![],
             funpiler_stack: vec![]
+        }
+    }
+    pub fn add_native(&mut self, native: NativeFunction) {
+        let index = self.insert_global(native.name.to_owned(), true, None, true);
+        if self.natives.len() == index as usize {
+            self.natives.push(native);
+        }
+        else if self.natives.len() > index as usize {
+            self.natives[index as usize] = native;
+        }
+        else {
+            self.error_at_current("Failed to add native function. Index error.");
         }
     }
     pub fn compile(mut self) -> Result<CompilerOutput, Vec<CompilerError>> {
@@ -84,7 +100,7 @@ impl<'a> Compiler<'a> {
         if self.had_error {
             return Err(self.errors)
         }
-        return Ok(CompilerOutput { script_function, globals_count: self.globals_state.len() });
+        return Ok(CompilerOutput { script_function, globals_count: self.globals_state.len(), natives: self.natives });
     }
 }
 
@@ -271,13 +287,21 @@ impl<'a> Compiler<'a> {
     /// If identifier does not exist in globals, it will add it and return index. </br>
     fn global_identifier(&mut self, token: Token, is_declaration: bool) -> u8 {
         let identifier_name = &self.source[token.start..(token.start + token.length)];
-        if let Some((index, declared, tokens_using)) = self.globals_state.get_mut(identifier_name) {
-            if *declared && is_declaration {
-                self.error_at(token, "Aready a global variable with this name.");
+        return self.insert_global(identifier_name.to_owned(), is_declaration, token.into(), false);
+    }
+
+    fn insert_global(&mut self, name: String, is_declaration: bool, token: Option<Token>, overwrite: bool) -> u8 {
+        if let Some((index, declared, tokens_using)) = self.globals_state.get_mut(&name) {
+            if *declared && is_declaration && !overwrite && token.is_some() {
+                self.error_at(token.unwrap(), "Aready a global variable with this name.");
                 return 0;
             }
             if is_declaration { *declared = true; }
-            else { tokens_using.push(token); }
+            else { 
+                if let Some(token) = token {
+                    tokens_using.push(token);
+                }
+            }
             return *index;
         } else {
             let globals_count = self.globals_state.len() as u8;
@@ -285,7 +309,8 @@ impl<'a> Compiler<'a> {
                 self.error_at_previous("Too many globals.");
                 return 0;
             }
-            self.globals_state.insert(identifier_name, (globals_count, is_declaration, vec![token]));
+            let tokens = if let Some(token) = token { vec![token] } else { vec![] };
+            self.globals_state.insert(name, (globals_count, is_declaration, tokens));
             return globals_count;
         }
     }
