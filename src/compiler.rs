@@ -755,26 +755,6 @@ mod test {
     use crate::{chunk::Chunk, compiler::{Compiler, CompilerError}, opcode::OpCode, value::Value};
 
     #[test]
-    fn print_number() {
-        let source = r#"print 1"#;
-        let compiler = Compiler::new(&source);
-
-        let expected_chunk = Chunk {
-            bytes: vec![
-                OpCode::Constant.into(),
-                0,
-                //OpCode::Print.into(),
-                OpCode::Return.into()
-            ],
-            lines: vec![1, 1, 1, 1],
-            constants: vec![Value::Number(1.0)],
-        };
-        
-        let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile").script_function.chunk);
-    }
-
-    #[test]
     fn arithmetic() {
         let source = r#"1 + 2 * (5 - 3)"#;
         let compiler = Compiler::new(&source);
@@ -793,9 +773,10 @@ mod test {
                 OpCode::Multiply.into(),
                 OpCode::Add.into(),
                 OpCode::Pop.into(),
+                OpCode::Null.into(),
                 OpCode::Return.into()
             ],
-            lines: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            lines: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
             constants: vec![
                 Value::Number(1.0), 
                 Value::Number(2.0), 
@@ -831,9 +812,10 @@ mod test {
                 0,
                 OpCode::Negate.into(),
                 OpCode::Pop.into(),
+                OpCode::Null.into(),
                 OpCode::Return.into()
             ],
-            lines: vec![1, 1, 1, 1, 1],
+            lines: vec![1, 1, 1, 1, 1, 1],
             constants: vec![Value::Number(10.4)],
         };
 
@@ -843,18 +825,20 @@ mod test {
 
     #[test]
     fn single_line() {
-        let source = r#"print 1"#;
+        let source = r#"var my_global = 1001.4"#;
         let compiler = Compiler::new(&source);
 
         let expected_chunk = Chunk {
             bytes: vec![
                 OpCode::Constant.into(),
                 0,
-                //OpCode::Print.into(),
+                OpCode::DefineGlobal.into(),
+                0,
+                OpCode::Null.into(),
                 OpCode::Return.into()
             ],
-            lines: vec![1, 1, 1, 1],
-            constants: vec![Value::Number(1.0)],
+            lines: vec![1, 1, 1, 1, 1, 1],
+            constants: vec![Value::Number(1001.4)],
         };
         
         let output = compiler.compile();
@@ -865,17 +849,19 @@ mod test {
     fn newline_start() {
         let source = r#"    
 
-print 1"#;
+var p = 1"#;
         let compiler = Compiler::new(&source);
 
         let expected_chunk = Chunk {
             bytes: vec![
                 OpCode::Constant.into(),
                 0,
-                //OpCode::Print.into(),
+                OpCode::DefineGlobal.into(),
+                0,
+                OpCode::Null.into(),
                 OpCode::Return.into()
             ],
-            lines: vec![3, 3, 3, 3],
+            lines: vec![3, 3, 3, 3, 3, 3],
             constants: vec![Value::Number(1.0)],
         };
         
@@ -885,7 +871,7 @@ print 1"#;
 
     #[test]
     fn newline_end() {
-        let source = r#"print 1
+        let source = r#"var x = 1
 "#;
         let compiler = Compiler::new(&source);
 
@@ -893,10 +879,12 @@ print 1"#;
             bytes: vec![
                 OpCode::Constant.into(),
                 0,
-                //OpCode::Print.into(),
+                OpCode::DefineGlobal.into(),
+                0,
+                OpCode::Null.into(),
                 OpCode::Return.into()
             ],
-            lines: vec![1, 1, 1, 2],
+            lines: vec![1, 1, 1, 1, 2, 2],
             constants: vec![Value::Number(1.0)],
         };
         
@@ -921,9 +909,10 @@ var g2 = 2"#;
                 1,
                 OpCode::DefineGlobal.into(),
                 1,
+                OpCode::Null.into(),
                 OpCode::Return.into()
             ],
-            lines: vec![2, 2, 2, 2, 3, 3, 3, 3, 3],
+            lines: vec![2, 2, 2, 2, 3, 3, 3, 3, 3, 3],
             constants: vec![Value::Number(1.0), Value::Number(2.0)],
         };
         let expected_global_count = 2;
@@ -956,9 +945,10 @@ g = 4"#;
                 OpCode::SetGlobal.into(),
                 0,
                 OpCode::Pop.into(),
+                OpCode::Null.into(),
                 OpCode::Return.into()
             ],
-            lines: vec![2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4],
+            lines: vec![2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4],
             constants: vec![Value::Number(1.0), Value::Number(2.0), Value::Number(4.0)],
         };
         let expected_global_count = 2;
@@ -983,28 +973,16 @@ var g = 2"#;
     }
 
     #[test]
-    /// For now this remains a runtime error
-    fn undefined_variable() {
+    fn error_undefined_variable() {
         let source = r#"g = 1"#;
         let compiler = Compiler::new(&source);
         
-        let expected_chunk = Chunk {
-            bytes: vec![
-                OpCode::Constant.into(),
-                0,
-                OpCode::SetGlobal.into(),
-                0,
-                OpCode::Pop.into(),
-                OpCode::Return.into()
-            ],
-            lines: vec![1, 1, 1, 1, 1, 1],
-            constants: vec![Value::Number(1.0)],
-        };
-        let expected_global_count = 1;
+        let expected_result = Err(vec![
+            CompilerError { line: 1, start: 0, len: 1 }
+        ]);
 
-        let output = compiler.compile().expect("Failed to compile");
-        assert_eq!(expected_chunk, output.script_function.chunk);
-        assert_eq!(expected_global_count, output.globals_count);
+        let output = compiler.compile();
+        assert_eq!(expected_result, output);
     }
 
     #[test]
@@ -1030,9 +1008,10 @@ var c = b = a"#;
                 1,
                 OpCode::DefineGlobal.into(),
                 2,
+                OpCode::Null.into(),
                 OpCode::Return.into()
             ],
-            lines: vec![2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4],
+            lines: vec![2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4],
             constants: vec![Value::Number(1.0)],
         };
         let expected_global_count = 3;
