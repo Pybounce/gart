@@ -322,18 +322,20 @@ mod test {
     #[test]
     fn error_random_indent() {
         let source = r#"
-print "hello"
-    print "world"
+out = "hello"
+    out = "world"
 "#;
         let mut scanner = Scanner::new(&source);
 
         let expected_tokens = vec![
-            Token::new(TokenType::Print, 1, 5, 2),
+            Token::new(TokenType::Identifier, 1, 3, 2),
+            Token::new(TokenType::Equal, 5, 1, 2),
             Token::new(TokenType::String, 7, 7, 2),
 
             Token::new(TokenType::Error, 15, 4, 3),
 
-            Token::new(TokenType::Print, 19, 5, 3),
+            Token::new(TokenType::Identifier, 19, 3, 3),
+            Token::new(TokenType::Equal, 23, 1, 3),
             Token::new(TokenType::String, 25, 7, 3),
             Token::new(TokenType::NewLine, 32, 1, 3),
             Token::new(TokenType::Eof, 33, 0, 4),
@@ -348,7 +350,7 @@ print "hello"
     fn error_empty_if() {
         let source = r#"
 if x <= 1:
-print "hi"
+x = x + 1
 "#;
         let mut scanner = Scanner::new(&source);
 
@@ -361,10 +363,13 @@ print "hi"
 
             Token::new(TokenType::Error, 12, 0, 3),
 
-            Token::new(TokenType::Print, 12, 5, 3),
-            Token::new(TokenType::String, 18, 4, 3),
-            Token::new(TokenType::NewLine, 22, 1, 3),
-            Token::new(TokenType::Eof, 23, 0, 4),
+            Token::new(TokenType::Identifier, 12, 1, 3),
+            Token::new(TokenType::Equal, 14, 1, 3),
+            Token::new(TokenType::Identifier, 16, 1, 3),
+            Token::new(TokenType::Plus, 18, 1, 3),
+            Token::new(TokenType::Number, 20, 1, 3),
+            Token::new(TokenType::NewLine, 21, 1, 3),
+            Token::new(TokenType::Eof, 22, 0, 4),
         ];
 
         for (i, expected_token) in expected_tokens.iter().enumerate() {
@@ -376,10 +381,9 @@ print "hi"
     fn gap_in_indent() {
         let source = r#"
 if x <= 1:
-    print "hi"
-    print "hello!"
+    a = false
 
-    print "hola"
+    x = x + 1
 "#;
         let mut scanner = Scanner::new(&source);
 
@@ -392,20 +396,20 @@ if x <= 1:
             Token::new(TokenType::NewLine, 11, 1, 2),
 
             Token::new(TokenType::Indent, 12, 4, 3),
-            Token::new(TokenType::Print, 16, 5, 3),
-            Token::new(TokenType::String, 22, 4, 3),
-            Token::new(TokenType::NewLine, 26, 1, 3),
+            Token::new(TokenType::Identifier, 16, 1, 3),
+            Token::new(TokenType::Equal, 18, 1, 3),
+            Token::new(TokenType::False, 20, 5, 3),
+            Token::new(TokenType::NewLine, 25, 1, 3),
 
-            Token::new(TokenType::Print, 31, 5, 4),
-            Token::new(TokenType::String, 37, 8, 4),
-            Token::new(TokenType::NewLine, 45, 1, 4),
+            Token::new(TokenType::Identifier, 31, 1, 5),
+            Token::new(TokenType::Equal, 33, 1, 5),
+            Token::new(TokenType::Identifier, 35, 1, 5),
+            Token::new(TokenType::Plus, 37, 1, 5),
+            Token::new(TokenType::Number, 39, 1, 5),
+            Token::new(TokenType::NewLine, 40, 1, 5),
 
-            Token::new(TokenType::Print, 51, 5, 6),
-            Token::new(TokenType::String, 57, 6, 6),
-            Token::new(TokenType::NewLine, 63, 1, 6),
-            Token::new(TokenType::Dedent, 64, 0, 7),
-
-            Token::new(TokenType::Eof, 64, 0, 7),
+            Token::new(TokenType::Dedent, 41, 0, 6),
+            Token::new(TokenType::Eof, 41, 0, 6),
         ];
 
         for (i, expected_token) in expected_tokens.iter().enumerate() {
@@ -419,10 +423,10 @@ if x <= 1:
         // But since it ends in a newline with no other characters, it should be ignored.
         let source = r#"
 if x <= 1:
-    print "x greater than 1"
+    out = "x greater than 1"
             
 if x == 42:
-    print "42"
+    answer_found = true
 "#;
         let mut scanner = Scanner::new(&source);
 
@@ -435,7 +439,8 @@ if x == 42:
             Token::new(TokenType::NewLine, 11, 1, 2),
 
             Token::new(TokenType::Indent, 12, 4, 3),
-            Token::new(TokenType::Print, 16, 5, 3),
+            Token::new(TokenType::Identifier, 16, 3, 3),
+            Token::new(TokenType::Equal, 20, 1, 3),
             Token::new(TokenType::String, 22, 18, 3),
             Token::new(TokenType::NewLine, 40, 1, 3),
             Token::new(TokenType::Dedent, 54, 0, 5),
@@ -448,12 +453,13 @@ if x == 42:
             Token::new(TokenType::NewLine, 65, 1, 5),
 
             Token::new(TokenType::Indent, 66, 4, 6),
-            Token::new(TokenType::Print, 70, 5, 6),
-            Token::new(TokenType::String, 76, 4, 6),
-            Token::new(TokenType::NewLine, 80, 1, 6),
-            Token::new(TokenType::Dedent, 81, 0, 7),
+            Token::new(TokenType::Identifier, 70, 12, 6),
+            Token::new(TokenType::Equal, 83, 1, 6),
+            Token::new(TokenType::True, 85, 4, 6),
+            Token::new(TokenType::NewLine, 89, 1, 6),
+            Token::new(TokenType::Dedent, 90, 0, 7),
 
-            Token::new(TokenType::Eof, 81, 0, 7),
+            Token::new(TokenType::Eof, 90, 0, 7),
         ];
 
         for (i, expected_token) in expected_tokens.iter().enumerate() {
@@ -465,7 +471,7 @@ if x == 42:
     fn unresolved_indents_at_eof() {
         let source = r#"
 if x <= 1:
-    print "x greater than 1""#;
+    out = "x greater than 1""#;
 
         let mut scanner = Scanner::new(&source);
 
@@ -478,7 +484,8 @@ if x <= 1:
             Token::new(TokenType::NewLine, 11, 1, 2),
 
             Token::new(TokenType::Indent, 12, 4, 3),
-            Token::new(TokenType::Print, 16, 5, 3),
+            Token::new(TokenType::Identifier, 16, 3, 3),
+            Token::new(TokenType::Equal, 20, 1, 3),
             Token::new(TokenType::String, 22, 18, 3),
             Token::new(TokenType::NewLine, 40, 0, 3),
             Token::new(TokenType::Dedent, 40, 0, 3),
@@ -496,9 +503,9 @@ if x <= 1:
         let source = r#"
 var x = 42
 if x > 1:
-    print "x greater than 1"
+    out = "x greater than 1"
     if x == 42:
-        print "x is 42"
+        out = "x is 42"
 "#;
         let mut scanner = Scanner::new(&source);
 
@@ -515,7 +522,8 @@ if x > 1:
             Token::new(TokenType::Colon, 20, 1, 3),
             Token::new(TokenType::NewLine, 21, 1, 3),
             Token::new(TokenType::Indent, 22, 4, 4),
-            Token::new(TokenType::Print, 26, 5, 4),
+            Token::new(TokenType::Identifier, 26, 3, 4),
+            Token::new(TokenType::Equal, 30, 1, 4),
             Token::new(TokenType::String, 32, 18, 4),
             Token::new(TokenType::NewLine, 50, 1, 4),
             Token::new(TokenType::If, 55, 2, 5),
@@ -525,7 +533,8 @@ if x > 1:
             Token::new(TokenType::Colon, 65, 1, 5),
             Token::new(TokenType::NewLine, 66, 1, 5),
             Token::new(TokenType::Indent, 67, 8, 6),
-            Token::new(TokenType::Print, 75, 5, 6),
+            Token::new(TokenType::Identifier, 75, 3, 6),
+            Token::new(TokenType::Equal, 79, 1, 6),
             Token::new(TokenType::String, 81, 9, 6),
             Token::new(TokenType::NewLine, 90, 1, 6),
             Token::new(TokenType::Dedent, 91, 0, 7),
@@ -545,7 +554,7 @@ var    x   =     42
        
                  
 
-print   "x is 42"
+out =   "x is 42"
 "#;
         let mut scanner = Scanner::new(&source);
 
@@ -556,7 +565,8 @@ print   "x is 42"
             Token::new(TokenType::Number, 18, 2, 2),
             Token::new(TokenType::NewLine, 20, 1, 2),
 
-            Token::new(TokenType::Print, 48, 5, 6),
+            Token::new(TokenType::Identifier, 48, 3, 6),
+            Token::new(TokenType::Equal, 52, 1, 6),
             Token::new(TokenType::String, 56, 9, 6),
             Token::new(TokenType::NewLine, 65, 1, 6),
 
@@ -627,7 +637,7 @@ line 2"
 
     #[test]
     fn keywords() {
-        let source = r#"and else false for fn if null or print return true var while"#;
+        let source = r#"and else false for fn if null or return true var while"#;
         let mut scanner = Scanner::new(&source);
 
         let expected_tokens = vec![
@@ -639,13 +649,12 @@ line 2"
             Token::new(TokenType::If, 22, 2, 1),
             Token::new(TokenType::Null, 25, 4, 1),
             Token::new(TokenType::Or, 30, 2, 1),
-            Token::new(TokenType::Print, 33, 5, 1),
-            Token::new(TokenType::Return, 39, 6, 1),
-            Token::new(TokenType::True, 46, 4, 1),
-            Token::new(TokenType::Var, 51, 3, 1),
-            Token::new(TokenType::While, 55, 5, 1),
-            Token::new(TokenType::NewLine, 60, 0, 1),
-            Token::new(TokenType::Eof, 60, 0, 1),
+            Token::new(TokenType::Return, 33, 6, 1),
+            Token::new(TokenType::True, 40, 4, 1),
+            Token::new(TokenType::Var, 45, 3, 1),
+            Token::new(TokenType::While, 49, 5, 1),
+            Token::new(TokenType::NewLine, 54, 0, 1),
+            Token::new(TokenType::Eof, 54, 0, 1),
         ];
 
         for (i, expected_token) in expected_tokens.iter().enumerate() {
@@ -821,7 +830,7 @@ line 2"
         // The final statement must have a terminating newline
         let source = r#"
 if x <= 1:
-    print "x greater than 1"
+    out = "x greater than 1"
 "#;
         let mut scanner = Scanner::new(&source);
 
@@ -834,7 +843,8 @@ if x <= 1:
             Token::new(TokenType::NewLine, 11, 1, 2),
 
             Token::new(TokenType::Indent, 12, 4, 3),
-            Token::new(TokenType::Print, 16, 5, 3),
+            Token::new(TokenType::Identifier, 16, 3, 3),
+            Token::new(TokenType::Equal, 20, 1, 3),
             Token::new(TokenType::String, 22, 18, 3),
             Token::new(TokenType::NewLine, 40, 1, 3),
             Token::new(TokenType::Dedent, 41, 0, 4),

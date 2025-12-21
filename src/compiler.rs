@@ -763,7 +763,7 @@ mod test {
             bytes: vec![
                 OpCode::Constant.into(),
                 0,
-                OpCode::Print.into(),
+                //OpCode::Print.into(),
                 OpCode::Return.into()
             ],
             lines: vec![1, 1, 1, 1],
@@ -850,7 +850,7 @@ mod test {
             bytes: vec![
                 OpCode::Constant.into(),
                 0,
-                OpCode::Print.into(),
+                //OpCode::Print.into(),
                 OpCode::Return.into()
             ],
             lines: vec![1, 1, 1, 1],
@@ -872,7 +872,7 @@ print 1"#;
             bytes: vec![
                 OpCode::Constant.into(),
                 0,
-                OpCode::Print.into(),
+                //OpCode::Print.into(),
                 OpCode::Return.into()
             ],
             lines: vec![3, 3, 3, 3],
@@ -893,7 +893,7 @@ print 1"#;
             bytes: vec![
                 OpCode::Constant.into(),
                 0,
-                OpCode::Print.into(),
+                //OpCode::Print.into(),
                 OpCode::Return.into()
             ],
             lines: vec![1, 1, 1, 2],
