@@ -4,4 +4,8 @@ var a = 1
 fn add(a, b):
     return a + b
 
+var t = a()
 print add(5, 3)
+
+var t2 = a()
+print t2 - t

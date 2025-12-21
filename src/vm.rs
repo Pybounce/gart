@@ -1,6 +1,6 @@
-use std::rc::Rc;
+use std::{rc::Rc, time::{SystemTime, UNIX_EPOCH}};
 
-use crate::{chunk::Chunk, compiler::{Compiler, CompilerOutput}, interpreter::RuntimeError, opcode::OpCode, value::{Function, Value}};
+use crate::{chunk::Chunk, compiler::{Compiler, CompilerOutput}, interpreter::RuntimeError, opcode::OpCode, value::{Function, NativeFunction, Value}};
 
 
 pub struct VM {
@@ -31,7 +31,21 @@ impl VM {
             stack_offset: 0,
             pc: 0,
         });
-        self.globals = vec![None; compiler_output.globals_count];
+        self.globals = vec![None; compiler_output.globals_count + 1];
+        self.globals[0] = Some(Value::NativeFunc(Rc::new(NativeFunction {
+            name: "time".to_owned(),
+            arity: 0,
+            function: {
+                fn time_native(_: &[Value]) -> Value {
+                    let secs = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs_f64();
+                    Value::Number(secs)
+                }
+                time_native
+            },
+        })));
         return self.run();
     }
 
@@ -235,9 +249,13 @@ impl VM {
                     stack_offset: self.stack.len() - 1 - arg_count,
                     pc: 0,
                 };
-                
                 self.call_frames.push(frame);
-
+            },
+            Value::NativeFunc(native_function) => {
+                let args_slice = &self.stack[(self.stack.len() - arg_count)..self.stack.len()];
+                let return_val = (native_function.function)(args_slice);
+                self.stack.truncate(self.stack.len() - arg_count);
+                self.stack.push(return_val);
             },
         }
 
