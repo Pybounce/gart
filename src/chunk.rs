@@ -1,6 +1,6 @@
 use crate::{opcode::OpCode, value::Value};
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Chunk {
     pub bytes: Vec<u8>,
     pub lines: Vec<usize>,
@@ -22,7 +22,7 @@ impl Chunk {
         return chunk;
     }
     pub fn write_op(&mut self, op: OpCode, line: usize) {
-        self.write_byte(op as u8, line);
+        self.write_byte(u8::from(op), line);
     }
     pub fn write_byte(&mut self, byte: u8, line: usize) {
         self.bytes.push(byte);

@@ -71,7 +71,7 @@ impl From::<ParsePrecedence> for u8 {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ParseFn {
     None,   // neater than using option everywhere, sue me. (don't sue me)
     Number,

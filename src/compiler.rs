@@ -1,20 +1,40 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{backtrace, collections::HashMap, rc::Rc};
 
-use crate::{chunk::Chunk, interpreter::CompilerError, opcode::OpCode, parse::{ParseFn, ParsePrecedence, ParseRule}, scanner::Scanner, token::{Token, TokenType}, value::Value};
+use crate::{chunk::Chunk, interpreter::CompilerError, opcode::OpCode, parse::{ParseFn, ParsePrecedence, ParseRule}, scanner::Scanner, token::{Token, TokenType}, value::{Function, NativeFunction, Value}};
 
 
 pub struct Compiler<'a> {
     scanner: Scanner<'a>,
     source: &'a str,
-    chunk: Chunk,
     previous_token: Token,
     current_token: Token,
     had_error: bool,
     panic_mode: bool,
     errors: Vec<CompilerError>,
-    globals_state: HashMap<&'a str, (u8, bool, Vec<Token>)>,
+    globals_state: HashMap<String, (u8, bool, Vec<Token>)>,
+    funpiler_stack: Vec<Funpiler>,
+    natives: Vec<NativeFunction>,
+
+}
+
+struct Funpiler {
     locals: Vec<Local>,
-    scope_depth: usize
+    scope_depth: usize,
+    chunk: Chunk,
+    arity: u8,
+    name: String
+}
+
+impl Funpiler {
+    pub fn new() -> Self {
+        return Self {
+            locals: vec![],
+            scope_depth: 0,
+            chunk: Chunk::new(),
+            arity: 0,
+            name: "".to_owned()
+        };
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -25,8 +45,9 @@ struct Local {
 
 #[derive(PartialEq, Debug)]
 pub struct CompilerOutput {
-    pub chunk: Chunk,
-    pub globals_count: usize
+    pub script_function: Function,
+    pub globals_count: usize,
+    pub natives: Vec<NativeFunction>,
 }
 
 impl<'a> Compiler<'a> {
@@ -34,32 +55,52 @@ impl<'a> Compiler<'a> {
         Self {
             scanner: Scanner::new(source),
             source: source,
-            chunk: Chunk::new(),
             previous_token: Token::new(TokenType::Error, 0, 0, 0),  // I know.
             current_token: Token::new(TokenType::Error, 0, 0, 0),
             had_error: false,
             panic_mode: false,
             errors: vec![],
             globals_state: HashMap::new(),
-            locals: vec![],
-            scope_depth: 0
+            natives: vec![],
+            funpiler_stack: vec![]
+        }
+    }
+    pub fn add_native(&mut self, native: NativeFunction) {
+        let index = self.insert_global(native.name.to_owned(), true, None, true);
+        if self.natives.len() == index as usize {
+            self.natives.push(native);
+        }
+        else if self.natives.len() > index as usize {
+            self.natives[index as usize] = native;
+        }
+        else {
+            self.error_at_current("Failed to add native function. Index error.");
         }
     }
     pub fn compile(mut self) -> Result<CompilerOutput, Vec<CompilerError>> {
+        self.new_funpiler();
         self.advance();
         while self.match_token(TokenType::Eof) == false {
             self.declaration();
         }
 
-        self.finish();
+        let script_function = self.end_funpiler();
+
+
+        let globals: Vec<_> = self.globals_state.values().cloned().collect();
+        for (_, declared, tokens) in globals {
+            if !declared {
+                for token in tokens.iter() {
+                    self.error_at(*token, "Undefined global variable.");
+                    self.panic_mode = false;
+                }
+            }
+        }
+
         if self.had_error {
             return Err(self.errors)
         }
-        return Ok(CompilerOutput { chunk: self.chunk, globals_count: self.globals_state.len() });
-    }
-
-    fn finish(&mut self) {
-        self.emit_op(OpCode::Return);
+        return Ok(CompilerOutput { script_function, globals_count: self.globals_state.len(), natives: self.natives });
     }
 }
 
@@ -68,16 +109,122 @@ impl<'a> Compiler<'a> {
 // Statements/Declarations/Expressions
 impl<'a> Compiler<'a> {
     fn declaration(&mut self) {
-        if self.match_token(TokenType::Fn) { todo!(); }
+        if self.match_token(TokenType::Fn) { self.fn_declaration(); }
         else if self.match_token(TokenType::Var) { self.var_declaration(); }
         else { self.statement(); }
 
         if self.panic_mode { self.synchronise(); }
     }
 
+    fn fn_declaration(&mut self) {
+        self.consume(TokenType::Identifier, "Expect function name.");
+        if self.funpiler().scope_depth > 0 { 
+            self.error_at_previous("Cannot declare function inside another function.");
+        }
+        let global_index = self.global_identifier(self.previous_token, true);
+
+        let function = self.function();
+
+        self.emit_constant(Value::Func(Rc::new(function)));
+
+        self.emit_byte(OpCode::DefineGlobal);
+        self.emit_byte(global_index);
+    }
+
+    fn new_funpiler(&mut self) {
+        self.funpiler_stack.push(Funpiler::new());
+        self.funpiler().locals.push(Local {
+            token: Token::new(TokenType::Null, 0, 0, 0),
+            depth: 0,
+        });
+    }
+
+    fn end_funpiler(&mut self) -> Function {
+        self.emit_byte(OpCode::Null);
+        self.emit_byte(OpCode::Return);
+        let funpiler = self.funpiler_stack.pop().unwrap();
+        let function = Function {
+            name: funpiler.name,
+            arity: funpiler.arity,
+            chunk: funpiler.chunk,
+        };
+        return function;
+    }
+
+    fn function(&mut self) -> Function {
+        self.new_funpiler();
+        self.begin_scope();
+
+        self.consume(TokenType::LeftParen, "Expect '(' after function name.");
+        if !self.check_token(TokenType::RightParen) {
+            loop {
+                if self.funpiler().arity < u8::MAX {
+                    self.funpiler().arity += 1;
+                    
+                    self.consume(TokenType::Identifier, "Expect parameter name.");
+                    let new_local = self.previous_token;
+
+                    for i in (0..self.funpiler().locals.len()).rev() {
+                        let local = self.funpiler().locals[i];
+                        if local.depth != -1 && local.depth < self.funpiler().scope_depth as i32 { break; }
+                    
+                        if self.identifiers_equal(local.token, new_local) {
+                            self.error_at_current("Already a variable with this name in scope.");
+                            break;
+                        }
+                    }
+                
+                    if self.funpiler().locals.len() == u8::MAX as usize{
+                        self.error_at_current("Local variable count has been exceeded.");
+                    }
+                    let depth = self.funpiler().scope_depth;
+                    self.funpiler().locals.push(Local { token: new_local, depth: depth as i32});
+
+                    if !self.match_token(TokenType::Comma) { break; }
+                }
+                else {
+                    self.error_at_current("Cannot have more than 255 parameters.");
+                }
+                
+            }
+        }
+        self.consume(TokenType::RightParen, "Expect ')' after parameters.");
+        self.consume(TokenType::Colon, "Expect ':' after function definition.");
+        self.consume(TokenType::NewLine, "Expect newline after ':' in function definition.");
+        self.consume(TokenType::Indent, "Expect indentation.");
+        self.block();
+
+        return self.end_funpiler();
+        
+    }
+
+    fn arguments(&mut self) -> u8 {
+        let mut arg_count: u8 = 0;
+        if !self.check_token(TokenType::RightParen) {
+            loop {
+                if arg_count == u8::MAX {
+                    self.error_at_current("Cannot have more than 255 arguments");
+                    break;
+                }
+                self.expression();
+                arg_count += 1;
+                if !self.match_token(TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+        self.consume(TokenType::RightParen, "Expect ')' after arguments.");
+        return arg_count;
+    }
+
+    fn call(&mut self) {
+        let arg_count = self.arguments();
+        self.emit_bytes(OpCode::Call, arg_count);
+    }
+
     fn var_declaration(&mut self) {
         self.consume(TokenType::Identifier, "Expect variable name.");
-        if self.scope_depth == 0 {
+        if self.funpiler().scope_depth == 0 {
             self.var_global();
         }
         else {
@@ -88,9 +235,9 @@ impl<'a> Compiler<'a> {
     fn var_local(&mut self) {
         let new_local = self.previous_token;
 
-        for i in (0..self.locals.len()).rev() {
-            let local = self.locals[i];
-            if local.depth != -1 && local.depth < self.scope_depth as i32 { break; }
+        for i in (0..self.funpiler().locals.len()).rev() {
+            let local = self.funpiler().locals[i];
+            if local.depth != -1 && local.depth < self.funpiler().scope_depth as i32 { break; }
 
             if self.identifiers_equal(local.token, new_local) {
                 self.error_at_current("Already a variable with this name in scope.");
@@ -98,20 +245,21 @@ impl<'a> Compiler<'a> {
             }
         }
 
-        if self.locals.len() == u8::MAX as usize{
+        if self.funpiler().locals.len() == u8::MAX as usize{
             self.error_at_current("Local variable count has been exceeded.");
         }
-        self.locals.push(Local { token: new_local, depth: -1 });
+        self.funpiler().locals.push(Local { token: new_local, depth: -1 });
 
         if self.match_token(TokenType::Equal) {
             self.expression();
         } else {
-            self.emit_op(OpCode::Null);
+            self.emit_byte(OpCode::Null);
         }
         self.consume(TokenType::NewLine, "Expect newline after expression.");
 
-        if let Some(local) = self.locals.last_mut() {
-            local.depth = self.scope_depth as i32;
+        let funpiler = self.funpiler();
+        if let Some(local) = funpiler.locals.last_mut() {
+            local.depth = funpiler.scope_depth as i32;
         }
     }
 
@@ -121,10 +269,10 @@ impl<'a> Compiler<'a> {
         if self.match_token(TokenType::Equal) {
             self.expression();
         } else {
-            self.emit_op(OpCode::Null);
+            self.emit_byte(OpCode::Null);
         }
         self.consume(TokenType::NewLine, "Expect newline after expression.");
-        self.emit_op(OpCode::DefineGlobal);
+        self.emit_byte(OpCode::DefineGlobal);
         self.emit_byte(global_index);
     }
 
@@ -139,13 +287,21 @@ impl<'a> Compiler<'a> {
     /// If identifier does not exist in globals, it will add it and return index. </br>
     fn global_identifier(&mut self, token: Token, is_declaration: bool) -> u8 {
         let identifier_name = &self.source[token.start..(token.start + token.length)];
-        if let Some((index, declared, tokens_using)) = self.globals_state.get_mut(identifier_name) {
-            if *declared && is_declaration {
-                self.error_at(token, "Aready a global variable with this name.");
+        return self.insert_global(identifier_name.to_owned(), is_declaration, token.into(), false);
+    }
+
+    fn insert_global(&mut self, name: String, is_declaration: bool, token: Option<Token>, overwrite: bool) -> u8 {
+        if let Some((index, declared, tokens_using)) = self.globals_state.get_mut(&name) {
+            if *declared && is_declaration && !overwrite && token.is_some() {
+                self.error_at(token.unwrap(), "Aready a global variable with this name.");
                 return 0;
             }
             if is_declaration { *declared = true; }
-            else { tokens_using.push(token); }
+            else { 
+                if let Some(token) = token {
+                    tokens_using.push(token);
+                }
+            }
             return *index;
         } else {
             let globals_count = self.globals_state.len() as u8;
@@ -153,7 +309,8 @@ impl<'a> Compiler<'a> {
                 self.error_at_previous("Too many globals.");
                 return 0;
             }
-            self.globals_state.insert(identifier_name, (globals_count, is_declaration, vec![token]));
+            let tokens = if let Some(token) = token { vec![token] } else { vec![] };
+            self.globals_state.insert(name, (globals_count, is_declaration, tokens));
             return globals_count;
         }
     }
@@ -167,11 +324,11 @@ impl<'a> Compiler<'a> {
 
         if can_assign && self.match_token(TokenType::Equal) {
             self.expression();
-            self.emit_op(set_op);
+            self.emit_byte(set_op);
             self.emit_byte(index);
         }
         else {
-            self.emit_op(get_op);
+            self.emit_byte(get_op);
             self.emit_byte(index);
         }
     }
@@ -179,8 +336,8 @@ impl<'a> Compiler<'a> {
     // Tries to find local, returns index if it can. </br>
     // Returns none otherwise.
     fn local_index(&mut self, identifier_token: Token) -> Option<u8> {
-        for i in (0..self.locals.len()).rev() {
-            let local = self.locals[i];
+        for i in (0..self.funpiler().locals.len()).rev() {
+            let local = self.funpiler().locals[i];
             if self.identifiers_equal(local.token, identifier_token) {
                 if local.depth == -1 { 
                     self.error_at_current("Can't read local variable in it's own initialiser.");
@@ -192,11 +349,11 @@ impl<'a> Compiler<'a> {
     }
 
     fn statement(&mut self) {
-        if self.match_token(TokenType::Print) {
-            self.print_statement();
-        }
-        else if self.match_token(TokenType::If) {
+        if self.match_token(TokenType::If) {
             self.if_statement();
+        }
+        else if self.match_token(TokenType::Return) {
+            self.return_statement();
         }
         else if self.match_token(TokenType::While) {
             self.while_statement();
@@ -208,6 +365,21 @@ impl<'a> Compiler<'a> {
         }
         else {
             self.expression_statement();
+        }
+    }
+
+    fn return_statement(&mut self) {
+        if self.funpiler_stack.len() <= 1 {
+            self.error_at_current("Cannot return from top-level code.");
+        }
+
+        if self.match_token(TokenType::NewLine) {
+            self.emit_bytes(OpCode::Null, OpCode::Return);
+        }
+        else {
+            self.expression();
+            self.consume(TokenType::NewLine, "Expect newline after return value.");
+            self.emit_byte(OpCode::Return);
         }
     }
 
@@ -236,7 +408,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn while_statement(&mut self) {
-        let jump_landing = self.chunk.bytes.len();
+        let jump_landing = self.funpiler().chunk.bytes.len();
         self.expression();
         self.consume(TokenType::Colon, "Expect ':' after condition.");
         self.consume(TokenType::NewLine, "Expect newline after ':'");
@@ -257,28 +429,22 @@ impl<'a> Compiler<'a> {
     }
 
     fn begin_scope(&mut self) {
-        self.scope_depth += 1;
+        self.funpiler().scope_depth += 1;
     }
 
     fn end_scope(&mut self) {
-        self.scope_depth -= 1;
-        while let Some(local) = self.locals.last() {
-            if local.depth <= self.scope_depth as i32 { break; }
-            self.locals.pop();
+        self.funpiler().scope_depth -= 1;
+        while let Some(local) = self.funpiler().locals.last() {
+            if local.depth <= self.funpiler().scope_depth as i32 { break; }
+            self.funpiler().locals.pop();
             self.emit_byte(OpCode::Pop);
         }
-    }
-
-    fn print_statement(&mut self) {
-        self.expression();
-        self.consume(TokenType::NewLine, "Expect newline after expression.");
-        self.emit_op(OpCode::Print);
     }
 
     fn expression_statement(&mut self) {
         self.expression();
         self.consume(TokenType::NewLine, "Expect newline after expression.");
-        self.emit_op(OpCode::Pop);
+        self.emit_byte(OpCode::Pop);
     }
 
     fn expression(&mut self) {
@@ -309,16 +475,16 @@ impl<'a> Compiler<'a> {
         }
         
         match operator {
-            TokenType::BangEqual =>     self.emit_ops(OpCode::Equal, OpCode::Not),
-            TokenType::EqualEqual =>    self.emit_op(OpCode::Equal),
-            TokenType::Greater =>       self.emit_op(OpCode::Greater),
-            TokenType::GreaterEqual =>  self.emit_ops(OpCode::Less, OpCode::Not),
-            TokenType::Less =>          self.emit_op(OpCode::Less),
-            TokenType::LessEqual =>     self.emit_ops(OpCode::Greater, OpCode::Not),
-            TokenType::Plus =>          self.emit_op(OpCode::Add),
-            TokenType::Minus =>         self.emit_op(OpCode::Subtract),
-            TokenType::Star =>          self.emit_op(OpCode::Multiply),
-            TokenType::Slash =>         self.emit_op(OpCode::Divide),
+            TokenType::BangEqual =>     self.emit_bytes(OpCode::Equal, OpCode::Not),
+            TokenType::EqualEqual =>    self.emit_byte(OpCode::Equal),
+            TokenType::Greater =>       self.emit_byte(OpCode::Greater),
+            TokenType::GreaterEqual =>  self.emit_bytes(OpCode::Less, OpCode::Not),
+            TokenType::Less =>          self.emit_byte(OpCode::Less),
+            TokenType::LessEqual =>     self.emit_bytes(OpCode::Greater, OpCode::Not),
+            TokenType::Plus =>          self.emit_byte(OpCode::Add),
+            TokenType::Minus =>         self.emit_byte(OpCode::Subtract),
+            TokenType::Star =>          self.emit_byte(OpCode::Multiply),
+            TokenType::Slash =>         self.emit_byte(OpCode::Divide),
             _ => self.error_at_current("binary operator mismatch."),
         };
         
@@ -360,8 +526,8 @@ impl<'a> Compiler<'a> {
         self.parse_precedence(ParsePrecedence::Unary);
 
         match operator {
-            TokenType::Bang => self.emit_op(OpCode::Not),
-            TokenType::Minus => self.emit_op(OpCode::Negate),
+            TokenType::Bang => self.emit_byte(OpCode::Not),
+            TokenType::Minus => self.emit_byte(OpCode::Negate),
             _ => self.error_at_previous("Unreachable unary operator...reached."),
         }
     }
@@ -392,7 +558,7 @@ impl<'a> Compiler<'a> {
             ParseFn::Number => self.number(can_assign),
             ParseFn::Binary => self.binary(can_assign),
             ParseFn::Grouping => self.grouping(can_assign),
-            ParseFn::Call => todo!(),
+            ParseFn::Call => self.call(),
             ParseFn::Unary => self.unary(can_assign),
             ParseFn::Variable => self.variable(can_assign),
             ParseFn::String => self.string(can_assign),
@@ -434,7 +600,6 @@ impl<'a> Compiler<'a> {
             TokenType::If =>            ParseRule::new(ParseFn::None, ParseFn::None, ParsePrecedence::None),
             TokenType::Null =>          ParseRule::new(ParseFn::Literal, ParseFn::None, ParsePrecedence::None),
             TokenType::Or =>            ParseRule::new(ParseFn::None, ParseFn::Or, ParsePrecedence::Or),
-            TokenType::Print =>         ParseRule::new(ParseFn::None, ParseFn::None, ParsePrecedence::None),
             TokenType::Return =>        ParseRule::new(ParseFn::None, ParseFn::None, ParsePrecedence::None),
             TokenType::True =>          ParseRule::new(ParseFn::Literal, ParseFn::None, ParsePrecedence::None),
             TokenType::Var =>           ParseRule::new(ParseFn::None, ParseFn::None, ParsePrecedence::None),
@@ -447,27 +612,24 @@ impl<'a> Compiler<'a> {
 }
 
 impl<'a> Compiler<'a> {
-    fn emit_op(&mut self, code: OpCode) {
-        self.emit_byte(code as u8);
-    }
-
-    fn emit_ops(&mut self, op1: OpCode, op2: OpCode) {
-        self.emit_op(op1);
-        self.emit_op(op2);
+    fn emit_byte(&mut self, byte: impl Into<u8>) {
+        let line = self.previous_token.line;
+        self.funpiler().chunk.write_byte(byte.into(), line);
     }
     
-    fn emit_byte(&mut self, byte: impl Into<u8>) {
-        self.chunk.write_byte(byte.into(), self.previous_token.line);
+    fn emit_bytes(&mut self, byte1: impl Into<u8>, byte2: impl Into<u8>) {
+        self.emit_byte(byte1);
+        self.emit_byte(byte2);
     }
 
     fn emit_constant(&mut self, value: Value) {
-        self.emit_op(OpCode::Constant);
+        self.emit_byte(OpCode::Constant);
         let constant_index = self.make_constant(value);
         self.emit_byte(constant_index);
     }
 
     fn make_constant(&mut self, value: Value) -> u8 {
-        let constant_index = self.chunk.write_constant(value);
+        let constant_index = self.funpiler().chunk.write_constant(value);
         if let Ok(index_u8) = u8::try_from(constant_index) {
             return index_u8;
         }
@@ -479,30 +641,36 @@ impl<'a> Compiler<'a> {
 
     fn emit_back_jump(&mut self, landing: usize) {
         self.emit_byte(OpCode::JumpBack);
-        let jump = self.chunk.bytes.len() - landing + 2;
+        let jump = self.funpiler().chunk.bytes.len() - landing + 2;
         if jump > u16::MAX.into() { self.error_at_current("Too much code to jump over."); }
         self.emit_byte(((jump >> 8) & 0xff) as u8);
         self.emit_byte((jump & 0xff) as u8);
     }
 
     fn emit_jump(&mut self, jump_op: OpCode) -> usize {
-        self.emit_op(jump_op);
+        self.emit_byte(jump_op);
         self.emit_byte(0);
         self.emit_byte(0);
-        return self.chunk.bytes.len() - 2;
+        return self.funpiler().chunk.bytes.len() - 2;
     }
 
     fn patch_jump(&mut self, offset: usize) {
-        let jump = self.chunk.bytes.len() - offset - 2;
+        let jump = self.funpiler().chunk.bytes.len() - offset - 2;
 
         if jump > u16::MAX.into() { self.error_at_current("Too much code to jump over."); }
-        self.chunk.bytes[offset] = ((jump >> 8) & 0xff) as u8;
-        self.chunk.bytes[offset + 1] = (jump & 0xff) as u8;
+        self.funpiler().chunk.bytes[offset] = ((jump >> 8) & 0xff) as u8;
+        self.funpiler().chunk.bytes[offset + 1] = (jump & 0xff) as u8;
     }
 }
 
 // Helpers
 impl<'a> Compiler<'a> {
+
+    /// Grabs the current funpiler from the top of the stack. </br>
+    /// Will panic if there are no funpilers on the stack.
+    fn funpiler(&mut self) -> &mut Funpiler {
+        return self.funpiler_stack.last_mut().unwrap();
+    }
 
     fn synchronise(&mut self) {
         self.panic_mode = false;
@@ -516,7 +684,6 @@ impl<'a> Compiler<'a> {
                 | TokenType::For
                 | TokenType::If
                 | TokenType::While
-                | TokenType::Print
                 | TokenType::Return => {
                     return;
                 }
@@ -588,26 +755,6 @@ mod test {
     use crate::{chunk::Chunk, compiler::{Compiler, CompilerError}, opcode::OpCode, value::Value};
 
     #[test]
-    fn print_number() {
-        let source = r#"print 1"#;
-        let compiler = Compiler::new(&source);
-
-        let expected_chunk = Chunk {
-            bytes: vec![
-                OpCode::Constant.into(),
-                0,
-                OpCode::Print.into(),
-                OpCode::Return.into()
-            ],
-            lines: vec![1, 1, 1, 1],
-            constants: vec![Value::Number(1.0)],
-        };
-        
-        let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
-    }
-
-    #[test]
     fn arithmetic() {
         let source = r#"1 + 2 * (5 - 3)"#;
         let compiler = Compiler::new(&source);
@@ -626,9 +773,10 @@ mod test {
                 OpCode::Multiply.into(),
                 OpCode::Add.into(),
                 OpCode::Pop.into(),
+                OpCode::Null.into(),
                 OpCode::Return.into()
             ],
-            lines: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            lines: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
             constants: vec![
                 Value::Number(1.0), 
                 Value::Number(2.0), 
@@ -638,7 +786,7 @@ mod test {
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
+        assert_eq!(expected_chunk, output.expect("Failed to compile").script_function.chunk);
     }
 
     #[test]
@@ -664,61 +812,66 @@ mod test {
                 0,
                 OpCode::Negate.into(),
                 OpCode::Pop.into(),
+                OpCode::Null.into(),
                 OpCode::Return.into()
             ],
-            lines: vec![1, 1, 1, 1, 1],
+            lines: vec![1, 1, 1, 1, 1, 1],
             constants: vec![Value::Number(10.4)],
         };
 
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
+        assert_eq!(expected_chunk, output.expect("Failed to compile").script_function.chunk);
     }
 
     #[test]
     fn single_line() {
-        let source = r#"print 1"#;
+        let source = r#"var my_global = 1001.4"#;
         let compiler = Compiler::new(&source);
 
         let expected_chunk = Chunk {
             bytes: vec![
                 OpCode::Constant.into(),
                 0,
-                OpCode::Print.into(),
+                OpCode::DefineGlobal.into(),
+                0,
+                OpCode::Null.into(),
                 OpCode::Return.into()
             ],
-            lines: vec![1, 1, 1, 1],
-            constants: vec![Value::Number(1.0)],
+            lines: vec![1, 1, 1, 1, 1, 1],
+            constants: vec![Value::Number(1001.4)],
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
+        assert_eq!(expected_chunk, output.expect("Failed to compile").script_function.chunk);
     }
 
     #[test]
     fn newline_start() {
         let source = r#"    
 
-print 1"#;
+var p = 1"#;
         let compiler = Compiler::new(&source);
 
         let expected_chunk = Chunk {
             bytes: vec![
                 OpCode::Constant.into(),
                 0,
-                OpCode::Print.into(),
+                OpCode::DefineGlobal.into(),
+                0,
+                OpCode::Null.into(),
                 OpCode::Return.into()
             ],
-            lines: vec![3, 3, 3, 3],
+            lines: vec![3, 3, 3, 3, 3, 3],
             constants: vec![Value::Number(1.0)],
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
+        assert_eq!(expected_chunk, output.expect("Failed to compile").script_function.chunk);
     }
 
     #[test]
     fn newline_end() {
-        let source = r#"print 1
+        let source = r#"var x = 1
 "#;
         let compiler = Compiler::new(&source);
 
@@ -726,15 +879,17 @@ print 1"#;
             bytes: vec![
                 OpCode::Constant.into(),
                 0,
-                OpCode::Print.into(),
+                OpCode::DefineGlobal.into(),
+                0,
+                OpCode::Null.into(),
                 OpCode::Return.into()
             ],
-            lines: vec![1, 1, 1, 2],
+            lines: vec![1, 1, 1, 1, 2, 2],
             constants: vec![Value::Number(1.0)],
         };
         
         let output = compiler.compile();
-        assert_eq!(expected_chunk, output.expect("Failed to compile").chunk);
+        assert_eq!(expected_chunk, output.expect("Failed to compile").script_function.chunk);
     }
 
     #[test]
@@ -754,15 +909,16 @@ var g2 = 2"#;
                 1,
                 OpCode::DefineGlobal.into(),
                 1,
+                OpCode::Null.into(),
                 OpCode::Return.into()
             ],
-            lines: vec![2, 2, 2, 2, 3, 3, 3, 3, 3],
+            lines: vec![2, 2, 2, 2, 3, 3, 3, 3, 3, 3],
             constants: vec![Value::Number(1.0), Value::Number(2.0)],
         };
         let expected_global_count = 2;
         
         let output = compiler.compile().expect("Failed to compile");
-        assert_eq!(expected_chunk, output.chunk);
+        assert_eq!(expected_chunk, output.script_function.chunk);
         assert_eq!(expected_global_count, output.globals_count);
     }
 
@@ -789,15 +945,16 @@ g = 4"#;
                 OpCode::SetGlobal.into(),
                 0,
                 OpCode::Pop.into(),
+                OpCode::Null.into(),
                 OpCode::Return.into()
             ],
-            lines: vec![2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4],
+            lines: vec![2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4],
             constants: vec![Value::Number(1.0), Value::Number(2.0), Value::Number(4.0)],
         };
         let expected_global_count = 2;
         
         let output = compiler.compile().expect("Failed to compile");
-        assert_eq!(expected_chunk, output.chunk);
+        assert_eq!(expected_chunk, output.script_function.chunk);
         assert_eq!(expected_global_count, output.globals_count);
     }
 
@@ -816,28 +973,16 @@ var g = 2"#;
     }
 
     #[test]
-    /// For now this remains a runtime error
-    fn undefined_variable() {
+    fn error_undefined_variable() {
         let source = r#"g = 1"#;
         let compiler = Compiler::new(&source);
         
-        let expected_chunk = Chunk {
-            bytes: vec![
-                OpCode::Constant.into(),
-                0,
-                OpCode::SetGlobal.into(),
-                0,
-                OpCode::Pop.into(),
-                OpCode::Return.into()
-            ],
-            lines: vec![1, 1, 1, 1, 1, 1],
-            constants: vec![Value::Number(1.0)],
-        };
-        let expected_global_count = 1;
+        let expected_result = Err(vec![
+            CompilerError { line: 1, start: 0, len: 1 }
+        ]);
 
-        let output = compiler.compile().expect("Failed to compile");
-        assert_eq!(expected_chunk, output.chunk);
-        assert_eq!(expected_global_count, output.globals_count);
+        let output = compiler.compile();
+        assert_eq!(expected_result, output);
     }
 
     #[test]
@@ -863,15 +1008,16 @@ var c = b = a"#;
                 1,
                 OpCode::DefineGlobal.into(),
                 2,
+                OpCode::Null.into(),
                 OpCode::Return.into()
             ],
-            lines: vec![2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4],
+            lines: vec![2, 2, 2, 2, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4],
             constants: vec![Value::Number(1.0)],
         };
         let expected_global_count = 3;
 
         let output = compiler.compile().expect("Failed to compile");
-        assert_eq!(expected_chunk, output.chunk);
+        assert_eq!(expected_chunk, output.script_function.chunk);
         assert_eq!(expected_global_count, output.globals_count);
     }
 }

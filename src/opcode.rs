@@ -1,8 +1,10 @@
+use std::fmt::Display;
+
 
 #[repr(u8)]
+#[derive(Debug, Clone, Copy)]
 pub enum OpCode {
     Constant,
-    Print,
     Pop,
     Equal,
     Not,
@@ -25,13 +27,13 @@ pub enum OpCode {
     JumpBack,
     True,
     False,
+    Call,
 }
 
 impl From::<OpCode> for u8 {
     fn from(value: OpCode) -> Self {
         match value {
             OpCode::Constant => 0,
-            OpCode::Print => 1,
             OpCode::Pop => 2,
             OpCode::Equal => 3,
             OpCode::Not => 4,
@@ -53,7 +55,8 @@ impl From::<OpCode> for u8 {
             OpCode::Jump => 20,
             OpCode::JumpBack => 21,
             OpCode::True => 22,
-            OpCode::False => 33,
+            OpCode::False => 23,
+            OpCode::Call => 24,
         }
     }
 }
@@ -64,7 +67,6 @@ impl TryFrom::<u8> for OpCode {
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(OpCode::Constant),
-            1 => Ok(OpCode::Print),
             2 => Ok(OpCode::Pop),
             3 => Ok(OpCode::Equal),
             4 => Ok(OpCode::Not),
@@ -87,6 +89,7 @@ impl TryFrom::<u8> for OpCode {
             21 => Ok(OpCode::JumpBack),
             22 => Ok(OpCode::True),
             23 => Ok(OpCode::False),
+            24 => Ok(OpCode::Call),
             _ => Err("Failed to convert u8 to ParsePrecedence")
         }
     }

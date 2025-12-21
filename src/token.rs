@@ -52,7 +52,6 @@ pub enum TokenType {
     If,
     Null,
     Or,
-    Print,
     Return,
     True,
     Var,
