@@ -1,4 +1,5 @@
 use std::{fmt::Display, rc::Rc};
+use std::fmt::Debug;
 
 use crate::chunk::Chunk;
 
@@ -18,13 +19,26 @@ use crate::chunk::Chunk;
     pub arity: u8,
     pub chunk: Chunk
  }
-
- #[derive(Clone, Debug, PartialEq)]
- pub struct NativeFunction {
+ 
+pub struct NativeFunction {
     pub name: String,
     pub arity: u8,
-    pub function: fn(&[Value]) -> Value
- }
+   pub function: Box<dyn Fn(&[Value]) -> Value>,
+}
+
+impl PartialEq for NativeFunction {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.arity == other.arity
+    }
+}
+
+impl Debug for NativeFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NativeFunction").field("name", &self.name).field("arity", &self.arity).finish()
+    }
+}
+
+
 
 
  impl Display for Value {

@@ -69,7 +69,7 @@ impl Interpreter {
                         .as_secs_f64();
                     Value::Number(secs)
                 }
-                time
+                Box::new(time)
             },
         };
 
@@ -81,7 +81,7 @@ impl Interpreter {
                     println!("{}", vals[0]);
                     return Value::Null;
                 }
-                print
+                Box::new(print)
             },
         };
 

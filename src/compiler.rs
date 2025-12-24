@@ -43,7 +43,7 @@ struct Local {
     depth: i32
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CompilerOutput {
     pub script_function: Function,
     pub globals_count: usize,
