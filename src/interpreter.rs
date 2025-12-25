@@ -1,16 +1,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::{compiler::{Compiler, CompilerOutput}, value::{NativeFunction, Value}, vm::VM};
+use crate::{compiler::Compiler, value::{NativeFunction, Value}, vm::VM};
 
 pub struct Interpreter {
-    source: String,
     vm: VM
-}
-
-pub enum InterpretResult {
-    Ok,
-    CompileErr(Vec<CompilerError>),
-    RuntimeErr(RuntimeError)
 }
 
 pub struct RuntimeError {
@@ -39,7 +32,6 @@ impl Interpreter {
                 let vm = VM::new(compiler_out);
 
                 let interpreter = Self {
-                    source,
                     vm: vm,
                 };
                 return Ok(interpreter);
@@ -51,13 +43,15 @@ impl Interpreter {
         }
 
     }
-    pub fn run(&mut self) -> InterpretResult {
+    pub fn run(&mut self) -> Result<(), RuntimeError> {
         return match self.vm.run() {
-            Ok(()) => InterpretResult::Ok,
-            Err(runtime_err) => InterpretResult::RuntimeErr(runtime_err),
+            Ok(()) => Ok(()),
+            Err(runtime_err) => Err(runtime_err),
         };
     }
 
+    /// Returns boolean for if there's a next step </br>
+    /// False means there will be no next step.
     pub fn step(&mut self) -> Result<bool, RuntimeError> {
         return self.vm.step();
     }
