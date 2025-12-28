@@ -26,13 +26,13 @@ struct Funpiler {
 }
 
 impl Funpiler {
-    pub fn new() -> Self {
+    pub fn new(name: &str) -> Self {
         return Self {
             locals: vec![],
             scope_depth: 0,
             chunk: Chunk::new(),
             arity: 0,
-            name: "".to_owned()
+            name: name.to_owned()
         };
     }
 }
@@ -78,7 +78,7 @@ impl<'a> Compiler<'a> {
         }
     }
     pub fn compile(mut self) -> Result<CompilerOutput, Vec<CompilerError>> {
-        self.new_funpiler();
+        self.new_funpiler(&"script");
         self.advance();
         while self.match_token(TokenType::Eof) == false {
             self.declaration();
@@ -118,12 +118,14 @@ impl<'a> Compiler<'a> {
 
     fn fn_declaration(&mut self) {
         self.consume(TokenType::Identifier, "Expect function name.");
+        let function_name = &self.source[self.previous_token.start..self.previous_token.length + self.previous_token.start];
+
         if self.funpiler().scope_depth > 0 { 
             self.error_at_previous("Cannot declare function inside another function.");
         }
         let global_index = self.global_identifier(self.previous_token, true);
 
-        let function = self.function();
+        let function = self.function(function_name);
 
         self.emit_constant(Value::Func(Rc::new(function)));
 
@@ -131,8 +133,8 @@ impl<'a> Compiler<'a> {
         self.emit_byte(global_index);
     }
 
-    fn new_funpiler(&mut self) {
-        self.funpiler_stack.push(Funpiler::new());
+    fn new_funpiler(&mut self, function_name: &str) {
+        self.funpiler_stack.push(Funpiler::new(function_name));
         self.funpiler().locals.push(Local {
             token: Token::new(TokenType::Null, 0, 0, 0),
             depth: 0,
@@ -151,8 +153,9 @@ impl<'a> Compiler<'a> {
         return function;
     }
 
-    fn function(&mut self) -> Function {
-        self.new_funpiler();
+    fn function(&mut self, function_name: &str) -> Function {
+        
+        self.new_funpiler(function_name);
         self.begin_scope();
 
         self.consume(TokenType::LeftParen, "Expect '(' after function name.");

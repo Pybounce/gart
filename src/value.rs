@@ -48,8 +48,8 @@ impl Debug for NativeFunction {
             Value::Number(v) => write!(f, "{}", v),
             Value::Null => write!(f, "NULL"),
             Value::String(v) => write!(f, "{}", v),
-            Value::Func(function) => write!(f, "{}", function.name),
-            Value::NativeFunc(native_function) => write!(f, "{}", native_function.name),
+            Value::Func(function) => write!(f, "fn {}", function.name),
+            Value::NativeFunc(native_function) => write!(f, "fn {}", native_function.name),
         }
     }
  }

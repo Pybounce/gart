@@ -1,6 +1,6 @@
+fn add(x, y):
+    return x + y
 
-var x = 0
+var x = add(3, 2)
+print(x)
 
-while x < 100:
-    x = x + 1
-    print(x)

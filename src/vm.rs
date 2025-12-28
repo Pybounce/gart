@@ -35,6 +35,11 @@ impl VM {
     }
 
     pub fn step(&mut self) -> Result<bool, RuntimeError> {
+                print!("STACK ");
+                for s in self.stack.iter() {
+                    print!("| {} | ", s);
+                }
+                println!("");
         let operation = OpCode::try_from(self.read_byte());
         if operation.is_err() { 
             let err = self.runtime_error("Failed to convert byte to opcode");
@@ -236,16 +241,30 @@ impl VM {
                     self.runtime_error("Incorrect argument count.");
                     return false;
                 }
-
+                print!("STACK ");
+                for s in self.stack.iter() {
+                    print!("| {} | ", s);
+                }
+                println!("");
                 let frame = CallFrame {
                     function,
                     stack_offset: self.stack.len() - 1 - arg_count,
                     pc: 0,
                 };
+                println!("stack offset: {}", frame.stack_offset);
                 self.call_frames.push(frame);
             },
             Value::NativeFunc(native_function) => {
+                print!("STACK ");
+                for s in self.stack.iter() {
+                    print!("| {} | ", s);
+                }
+                println!("");
                 let args_slice = &self.stack[(self.stack.len() - arg_count)..self.stack.len()];
+                println!("calling native with vals...");
+                for val in args_slice.iter() {
+                    println!("{:?}", val);
+                }
                 let return_val = (native_function.function)(args_slice);
                 self.stack.truncate(self.stack.len() - arg_count - 1);
                 self.stack.push(return_val);
