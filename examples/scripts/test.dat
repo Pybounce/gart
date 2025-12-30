@@ -22,10 +22,6 @@ while end_game == false:
         print(info)
 
         var input_guess = input("Guess: ")
-
-        if input_guess == "x":
-          end_game = true
-          guess = target
       
         guess = number(input_guess)
         if guess != null:
@@ -39,5 +35,3 @@ while end_game == false:
     clear()
     score = score + 1
     info = "Correct! Starting new game :D"
-
-print("You left with a score of " + string(score - 1))
