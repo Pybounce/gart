@@ -755,7 +755,7 @@ impl<'a> Compiler<'a> {
 
 #[cfg(test)]
 mod test {
-    use crate::{chunk::Chunk, compiler::{Compiler, CompilerError}, opcode::OpCode, value::Value};
+    use crate::{NativeFunction, chunk::Chunk, compiler::{Compiler, CompilerError}, opcode::OpCode, value::Value};
 
     #[test]
     fn arithmetic() {
@@ -1052,4 +1052,51 @@ if true:
         assert_eq!(expected_chunk, output.script_function.chunk);
         assert_eq!(expected_global_count, output.globals_count);    
     }
+    
+    #[test]
+    fn native_call_with_local() {
+        let source = r#"
+if true:
+    var x = 2
+    print(x)"#;
+        let print = NativeFunction {
+            name: "print".to_owned(),
+            arity: 1,
+            function: {
+                fn print(vals: &[Value]) -> Value {
+                    println!("{}", vals[0]);
+                    return Value::Null;
+                }
+                Box::new(print)
+            },
+        };
+        let mut compiler = Compiler::new(&source);
+        compiler.add_native(print);
+        
+        let expected_chunk = Chunk {
+            bytes: vec![
+                OpCode::True.into(),
+                OpCode::JumpIfFalse.into(), 0, 14,
+                OpCode::Pop.into(),
+                OpCode::Constant.into(), 0,
+                OpCode::GetGlobal.into(), 0,
+                OpCode::GetLocal.into(), 1,
+                OpCode::Call.into(), 1,
+                OpCode::Pop.into(),
+                OpCode::Pop.into(),
+                OpCode::Jump.into(), 0, 1,
+                OpCode::Pop.into(),
+                OpCode::Null.into(),
+                OpCode::Return.into() 
+            ],
+            lines: vec![2, 2, 2, 2, 2, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+            constants: vec![Value::Number(2.0)],
+        };
+        let expected_global_count = 1;
+
+        let output = compiler.compile().expect("Failed to compile");
+        assert_eq!(expected_chunk, output.script_function.chunk);
+        assert_eq!(expected_global_count, output.globals_count);    
+    }
+
 }

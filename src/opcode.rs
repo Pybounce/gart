@@ -90,7 +90,7 @@ impl TryFrom::<u8> for OpCode {
             22 => Ok(OpCode::True),
             23 => Ok(OpCode::False),
             24 => Ok(OpCode::Call),
-            _ => Err("Failed to convert u8 to ParsePrecedence")
+            _ => Err("Failed to convert u8 to OpCode")
         }
     }
 }

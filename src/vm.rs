@@ -18,28 +18,22 @@ struct CallFrame {
 
 impl VM {
     pub fn new(compiler_output: CompilerOutput) -> Self {
-        let call_frames = vec![CallFrame {
-            function: Rc::new(compiler_output.script_function),
-            stack_offset: 0,
-            pc: 0,
-        }];
         let mut globals = vec![None; compiler_output.globals_count];
         for (i, native) in compiler_output.natives.into_iter().enumerate() {
             globals[i] = Some(Value::NativeFunc(Rc::new(native)));            
         }
-        Self {
+        let mut vm = Self {
             stack: Vec::new(),
             globals: globals,
-            call_frames: call_frames
-        }
+            call_frames: vec![]
+        };
+        let script_func = Rc::new(compiler_output.script_function);
+        vm.stack.push(Value::Func(script_func.clone()));
+        vm.call_value(Value::Func(script_func), 0);
+        return vm;
     }
 
     pub fn step(&mut self) -> Result<bool, RuntimeError> {
-                print!("STACK ");
-                for s in self.stack.iter() {
-                    print!("| {} | ", s);
-                }
-                println!("");
         let operation = OpCode::try_from(self.read_byte());
         if operation.is_err() { 
             let err = self.runtime_error("Failed to convert byte to opcode");
@@ -241,30 +235,15 @@ impl VM {
                     self.runtime_error("Incorrect argument count.");
                     return false;
                 }
-                print!("STACK ");
-                for s in self.stack.iter() {
-                    print!("| {} | ", s);
-                }
-                println!("");
                 let frame = CallFrame {
                     function,
                     stack_offset: self.stack.len() - 1 - arg_count,
                     pc: 0,
                 };
-                println!("stack offset: {}", frame.stack_offset);
                 self.call_frames.push(frame);
             },
             Value::NativeFunc(native_function) => {
-                print!("STACK ");
-                for s in self.stack.iter() {
-                    print!("| {} | ", s);
-                }
-                println!("");
                 let args_slice = &self.stack[(self.stack.len() - arg_count)..self.stack.len()];
-                println!("calling native with vals...");
-                for val in args_slice.iter() {
-                    println!("{:?}", val);
-                }
                 let return_val = (native_function.function)(args_slice);
                 self.stack.truncate(self.stack.len() - arg_count - 1);
                 self.stack.push(return_val);
