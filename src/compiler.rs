@@ -91,7 +91,7 @@ impl<'a> Compiler<'a> {
         for (_, declared, tokens) in globals {
             if !declared {
                 for token in tokens.iter() {
-                    self.error_at(*token, "Undefined global variable.");
+                    self.error_at(*token, "Undefined variable.");
                     self.panic_mode = false;
                 }
             }
