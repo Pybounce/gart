@@ -11,7 +11,8 @@ pub struct Scanner<'a> {
     line: usize,
     indent_stack: Vec<i32>,
     indent_target: i32,
-    previous_token: Option<TokenType>
+    previous_token: Option<TokenType>,
+    previous_error: Option<String>
 }
 
 impl<'a> Scanner<'a> {
@@ -23,7 +24,8 @@ impl<'a> Scanner<'a> {
             line: 1,
             indent_stack: vec![0],
             indent_target: 0,
-            previous_token: None
+            previous_token: None,
+            previous_error: None
         }
     }
     pub fn scan_token(&mut self) -> Token {
@@ -45,6 +47,10 @@ impl<'a> Scanner<'a> {
         }
         self.previous_token = token.token_type.into();
         return token;
+    }
+
+    pub fn previous_error(&self) -> Option<&String> {
+        return self.previous_error.as_ref();
     }
 
 }
@@ -110,7 +116,8 @@ impl<'a> Scanner<'a> {
 
     fn make_err_token(&mut self, message: &str) -> Token {
         println!("{}", message);
-        return self.make_token(TokenType::Error);   // this is wrong but fine for now.
+        self.previous_error = Some(message.to_owned());
+        return self.make_token(TokenType::Error);
     }
 
     fn advance(&mut self) -> Option<char> {

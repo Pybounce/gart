@@ -1,37 +1,8 @@
-var score = 0
-var upper_range = 10
-var info = "New Game Started! :D"
-var end_game = false
+fn fib(n):
+  if n < 2:
+    return n
+  return fib(n - 2) + fib(n - 1)
 
-fn print_header():
-    print("------------------------------------------------------")
-    print("Guess the number between 0-" + string(upper_range))
-    print("Score: " + string(score))
-    print("------------------------------------------------------")
-    print("")
-
-
-while end_game == false:
-    var target = round(random_range(0, upper_range))
-    var guess = null
-
-    while guess != target:
-        clear()
-
-        print_header()
-        print(info)
-
-        var input_guess = input("Guess: ")
-      
-        guess = number(input_guess)
-        if guess != null:
-            if guess < target:
-                info = string(guess) + " was too low!"
-            else if guess > target:
-                info = string(guess) + " was too high!"
-        else:
-            info = "Invalid input: Only numbers are allowed."
-
-    clear()
-    score = score + 1
-    info = "Correct! Starting new game :D"
+var start = time()
+print(fib(35))
+print(time() - start)

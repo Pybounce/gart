@@ -702,6 +702,8 @@ impl<'a> Compiler<'a> {
         loop {
             self.current_token = self.scanner.scan_token();
             if self.current_token.token_type != TokenType::Error { break; }
+            let error_message = self .scanner .previous_error().map(|s| s.clone()).unwrap_or_else(|| "No error message.".to_string()); 
+            self.error_at_current(&error_message);
         }
     }
 
@@ -723,11 +725,11 @@ impl<'a> Compiler<'a> {
         return self.current_token.token_type == token_type;
     }
 
-    fn error_at_current(&mut self, message: &'static str) {
+    fn error_at_current(&mut self, message: &str) {
         self.error_at(self.current_token, message);
     }
 
-    fn error_at(&mut self, token: Token, message: &'static str) {
+    fn error_at(&mut self, token: Token, message: &str) {
         if self.panic_mode { return; }
         self.panic_mode = true;
 
@@ -735,7 +737,6 @@ impl<'a> Compiler<'a> {
 
         match token.token_type {
             TokenType::Eof => { eprint!(" at end"); },
-            TokenType::Error => { }
             _ => { eprint!(" at {}", &self.source[token.start..(token.start + token.length)]); }
         }
 
@@ -744,11 +745,12 @@ impl<'a> Compiler<'a> {
             line: token.line,
             start: token.start,
             len: token.length,
+            message: message.to_owned()
         });
         self.had_error = true;
     }
 
-    fn error_at_previous(&mut self, message: &'static str) {
+    fn error_at_previous(&mut self, message: &str) {
         self.error_at(self.previous_token, message);
     }
 }
@@ -796,12 +798,16 @@ mod test {
     fn error_trailing_arithmetic_op() {
         let source = r#"1 +"#;
         let compiler = Compiler::new(&source);
-        let expected_result = Err(vec![
-            CompilerError { line: 1, start: 3, len: 0 }
-        ]);
+        
+        let expected_err_positions: Vec<(usize, usize, usize)> = vec![(1, 3, 0)];
 
-        let output = compiler.compile();
-        assert_eq!(expected_result, output);
+        let output = compiler.compile().unwrap_err();
+        assert_eq!(expected_err_positions.len(), output.len());
+        for (line, start, len) in expected_err_positions.iter() {
+            assert_eq!(*line, output[0].line);
+            assert_eq!(*start, output[0].start);
+            assert_eq!(*len, output[0].len);
+        }
     }
 
     #[test]
@@ -967,12 +973,16 @@ g = 4"#;
 var g = 1
 var g = 2"#;
         let compiler = Compiler::new(&source);
-        let expected_result = Err(vec![
-            CompilerError { line: 3, start: 15, len: 1 }
-        ]);
 
-        let output = compiler.compile();
-        assert_eq!(expected_result, output);
+        let expected_err_positions: Vec<(usize, usize, usize)> = vec![(3, 15, 1)];
+
+        let output = compiler.compile().unwrap_err();
+        assert_eq!(expected_err_positions.len(), output.len());
+        for (line, start, len) in expected_err_positions.iter() {
+            assert_eq!(*line, output[0].line);
+            assert_eq!(*start, output[0].start);
+            assert_eq!(*len, output[0].len);
+        }
     }
 
     #[test]
@@ -980,12 +990,15 @@ var g = 2"#;
         let source = r#"g = 1"#;
         let compiler = Compiler::new(&source);
         
-        let expected_result = Err(vec![
-            CompilerError { line: 1, start: 0, len: 1 }
-        ]);
+        let expected_err_positions: Vec<(usize, usize, usize)> = vec![(1, 0, 1)];
 
-        let output = compiler.compile();
-        assert_eq!(expected_result, output);
+        let output = compiler.compile().unwrap_err();
+        assert_eq!(expected_err_positions.len(), output.len());
+        for (line, start, len) in expected_err_positions.iter() {
+            assert_eq!(*line, output[0].line);
+            assert_eq!(*start, output[0].start);
+            assert_eq!(*len, output[0].len);
+        }
     }
 
     #[test]

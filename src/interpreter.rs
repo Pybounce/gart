@@ -12,11 +12,12 @@ pub struct RuntimeError {
     pub message: &'static str
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CompilerError {
     pub line: usize,
     pub start: usize,
-    pub len: usize
+    pub len: usize,
+    pub message: String
 }
 
 impl Interpreter {
