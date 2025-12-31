@@ -109,7 +109,12 @@ impl<'a> Compiler<'a> {
 // Statements/Declarations/Expressions
 impl<'a> Compiler<'a> {
     fn declaration(&mut self) {
-        if self.match_token(TokenType::Fn) { self.fn_declaration(); }
+        if self.match_token(TokenType::Fn) { 
+            if self.funpiler().scope_depth > 0 {
+                self.error_at_previous("Functions can only currently be declared in the top level script, not inside other functions.");
+            }
+            self.fn_declaration(); 
+        }
         else if self.match_token(TokenType::Var) { self.var_declaration(); }
         else { self.statement(); }
 
