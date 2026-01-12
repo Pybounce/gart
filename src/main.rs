@@ -1,7 +1,7 @@
 
 use std::{env, fs, path::Path};
 
-use bytecode_vm::interpreter::Interpreter;
+use gart::interpreter::Interpreter;
 
 
 fn main() {

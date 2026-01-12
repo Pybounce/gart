@@ -1,6 +1,6 @@
 use std::fs;
 
-use bytecode_vm::interpreter::Interpreter;
+use gart::interpreter::Interpreter;
 
 
 fn main() {
