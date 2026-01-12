@@ -1133,4 +1133,67 @@ if true:
         assert_eq!(expected_global_count, output.globals_count);    
     }
 
+    #[test]
+    fn if_statement() {
+        let source = r#"
+if true:
+    var x = 2"#;
+        let compiler = Compiler::new(&source);
+        
+        let expected_chunk = Chunk {
+            bytes: vec![
+                OpCode::True.into(),
+                OpCode::JumpIfFalse.into(), 0, 7,
+                OpCode::Pop.into(),
+                OpCode::Constant.into(), 0,
+                OpCode::Pop.into(),
+                OpCode::Jump.into(), 0, 1,
+                OpCode::Pop.into(),
+                OpCode::Null.into(),
+                OpCode::Return.into()
+            ],
+            lines: vec![2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3],
+            constants: vec![Value::Number(2.0)],
+        };
+        let expected_global_count = 0;
+
+        let output = compiler.compile().expect("Failed to compile");
+        assert_eq!(expected_chunk, output.script_function.chunk);
+        assert_eq!(expected_global_count, output.globals_count);    
+    }
+
+    #[test]
+    fn if_else_statement() {
+        let source = r#"
+if true:
+    var x = 2
+else:
+    var y = 3"#;
+        let compiler = Compiler::new(&source);
+        
+        let expected_chunk = Chunk {
+            bytes: vec![
+                OpCode::True.into(),
+                OpCode::JumpIfFalse.into(), 0, 7,
+                OpCode::Pop.into(),
+                OpCode::Constant.into(), 0,
+                OpCode::Pop.into(),
+                OpCode::Jump.into(), 0, 4,
+                OpCode::Pop.into(),
+                OpCode::Constant.into(), 1,
+                OpCode::Pop.into(),
+                OpCode::Null.into(),
+                OpCode::Return.into()
+            ],
+            lines: vec![2, 2, 2, 2, 2, 3, 3, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5],
+            constants: vec![Value::Number(2.0), Value::Number(3.0)],
+        };
+        let expected_global_count = 0;
+
+        let output = compiler.compile().expect("Failed to compile");
+        assert_eq!(expected_chunk, output.script_function.chunk);
+        assert_eq!(expected_global_count, output.globals_count);    
+    }
+    
+
 }
