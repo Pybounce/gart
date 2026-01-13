@@ -882,6 +882,23 @@ if x <= 1:
 
         insta::assert_debug_snapshot!(tokens);
     }
+
+    #[test]
+    fn stress_counter_snapshot() {
+        let source: String = fs::read_to_string("examples/scripts/stress_counter.gart").expect("Failed to read stress_counter.gart file");
+        let mut scanner = Scanner::new(&source);
+
+        let mut tokens: Vec<Token> = vec![];
+        let mut token = scanner.scan_token();
+
+        while token.token_type != TokenType::Eof {
+            tokens.push(token);
+            token = scanner.scan_token();
+        }
+        tokens.push(token);
+
+        insta::assert_debug_snapshot!(tokens);
+    }
 }
 
 

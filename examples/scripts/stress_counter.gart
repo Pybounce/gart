@@ -1,0 +1,10 @@
+var x = 0
+var target = 100000
+
+var start = time()
+
+while x <= target:
+    print(x)
+    x = x + 1
+
+print("Counted to " + string(target) + " in " + string(time() - start) + " seconds!")

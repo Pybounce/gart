@@ -1210,6 +1210,19 @@ else:
         insta::assert_debug_snapshot!(output);
     }
 
+    #[test]
+    fn stress_counter_snapshot() {
+        let source: String = fs::read_to_string("examples/scripts/stress_counter.gart").expect("Failed to read stress_counter.gart file");
+        let mut compiler = Compiler::new(&source);
+        for native in Interpreter::builtin_natives() {
+            compiler.add_native(native);
+        }
+    
+        let output = compiler.compile().expect("Failed to compile");
+    
+        insta::assert_debug_snapshot!(output);
+    }
+
 }
 
 
