@@ -899,6 +899,23 @@ if x <= 1:
 
         insta::assert_debug_snapshot!(tokens);
     }
+
+    #[test]
+    fn fib_snapshot() {
+        let source: String = fs::read_to_string("examples/scripts/fib.gart").expect("Failed to read fib.gart file");
+        let mut scanner = Scanner::new(&source);
+
+        let mut tokens: Vec<Token> = vec![];
+        let mut token = scanner.scan_token();
+
+        while token.token_type != TokenType::Eof {
+            tokens.push(token);
+            token = scanner.scan_token();
+        }
+        tokens.push(token);
+
+        insta::assert_debug_snapshot!(tokens);
+    }
 }
 
 

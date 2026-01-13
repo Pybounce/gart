@@ -1223,6 +1223,18 @@ else:
         insta::assert_debug_snapshot!(output);
     }
 
+    #[test]
+    fn fib_snapshot() {
+        let source: String = fs::read_to_string("examples/scripts/fib.gart").expect("Failed to read fib.gart file");
+        let mut compiler = Compiler::new(&source);
+        for native in Interpreter::builtin_natives() {
+            compiler.add_native(native);
+        }
+    
+        let output = compiler.compile().expect("Failed to compile");
+    
+        insta::assert_debug_snapshot!(output);
+    }
 }
 
 
